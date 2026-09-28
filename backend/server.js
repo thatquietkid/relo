@@ -1,12 +1,14 @@
 import http from 'node:http';
 import { createClient } from '@supabase/supabase-js';
 import { isAdminRole, normalizeAdminEventQuery, toAdminEventView } from './admin-events.js';
+import { normalizeAdminUserInput } from './admin-users.js';
 
 const port = Number(process.env.PORT || 4100);
 const host = process.env.HOST || '0.0.0.0';
 const maxBodyBytes = 64 * 1024;
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 function json(res, status, payload, extraHeaders = {}) {
   res.writeHead(status, {
@@ -34,6 +36,15 @@ function publicClient(accessToken) {
   });
 }
 
+function adminClient() {
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    throw Object.assign(new Error('Supabase admin provisioning is not configured'), { statusCode: 503 });
+  }
+  return createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
+}
+
 function tokenFrom(req) {
   const value = req.headers.authorization || '';
   return value.startsWith('Bearer ') ? value.slice(7) : '';
@@ -51,6 +62,7 @@ async function currentUser(req) {
     .eq('id', authData.user.id)
     .maybeSingle();
   if (profileError) throw profileError;
+  if (!profile) return null;
   return {
     id: authData.user.id,
     email: profile?.email || authData.user.email,
@@ -165,28 +177,48 @@ async function route(req, res) {
     json(res, 200, { token: data.session.access_token, refreshToken: data.session.refresh_token, user }, headers);
     return;
   }
-  if (req.method === 'POST' && url.pathname === '/api/auth/signup') {
-    const input = await readJson(req);
-    const { data, error } = await publicClient().auth.signUp({
-      email: input.email,
-      password: input.password,
-      options: { data: { full_name: input.name || '' }, emailRedirectTo: redirectUrl() }
-    });
+  if (req.method === 'GET' && url.pathname === '/api/oauth/authorization-details') {
+    const access = await requireRole(req, res, ['employee', 'admin', 'hr']);
+    if (!access) return;
+    const authorizationId = String(url.searchParams.get('authorization_id') || '').trim();
+    if (!authorizationId) {
+      json(res, 400, { error: 'authorization_id is required' }, headers);
+      return;
+    }
+    const { data, error } = await access.client.auth.oauth.getAuthorizationDetails(authorizationId);
     if (error) {
       json(res, 400, { error: error.message }, headers);
       return;
     }
-    json(res, 202, { accepted: true, requiresEmailConfirmation: !data.session }, headers);
+    json(res, 200, { authorization: data }, headers);
+    return;
+  }
+  if (req.method === 'POST' && (url.pathname === '/api/oauth/approve' || url.pathname === '/api/oauth/deny')) {
+    const access = await requireRole(req, res, ['employee', 'admin', 'hr']);
+    if (!access) return;
+    const input = await readJson(req);
+    const authorizationId = String(input.authorizationId || '').trim();
+    if (!authorizationId) {
+      json(res, 400, { error: 'authorizationId is required' }, headers);
+      return;
+    }
+    const method = url.pathname.endsWith('/approve')
+      ? access.client.auth.oauth.approveAuthorization.bind(access.client.auth.oauth)
+      : access.client.auth.oauth.denyAuthorization.bind(access.client.auth.oauth);
+    const { data, error } = await method(authorizationId);
+    if (error) {
+      json(res, 400, { error: error.message }, headers);
+      return;
+    }
+    json(res, 200, { redirectUrl: data?.redirect_url || '' }, headers);
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/auth/signup') {
+    json(res, 403, { error: 'Self-service registration is disabled. Ask an administrator for an invitation.' }, headers);
     return;
   }
   if (req.method === 'POST' && url.pathname === '/api/auth/send-verification') {
-    const input = await readJson(req);
-    const { error } = await publicClient().auth.resend({ type: 'signup', email: input.email, options: { emailRedirectTo: redirectUrl() } });
-    if (error) {
-      json(res, 400, { error: error.message }, headers);
-      return;
-    }
-    json(res, 202, { accepted: true, delivery: 'supabase-smtp' }, headers);
+    json(res, 403, { error: 'Self-service registration is disabled. Ask an administrator for an invitation.' }, headers);
     return;
   }
   if (req.method === 'POST' && url.pathname === '/api/auth/reset-password') {
@@ -253,6 +285,33 @@ async function route(req, res) {
     const { data: events, error } = await query;
     if (error) throw error;
     json(res, 200, { user: access.user, events: (events || []).map(toAdminEventView) }, headers);
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/users') {
+    const access = await requireRole(req, res, ['admin']);
+    if (!access || !isAdminRole(access.user.role)) return;
+    const input = normalizeAdminUserInput(await readJson(req));
+    const { data, error } = await adminClient().auth.admin.inviteUserByEmail(input.email, {
+      data: { full_name: input.name },
+      redirectTo: redirectUrl()
+    });
+    if (error || !data.user) {
+      json(res, 400, { error: error?.message || 'Unable to invite employee' }, headers);
+      return;
+    }
+    const { error: eventError } = await access.client.from('platform_events').insert({
+      category: 'auth',
+      event_name: 'employee_invited',
+      severity: 'info',
+      summary: 'An employee invitation was sent from the admin workspace.',
+      actor_id: access.user.id,
+      properties: { email: input.email, full_name: input.name }
+    });
+    if (eventError) throw eventError;
+    json(res, 201, {
+      invited: true,
+      user: { id: data.user.id, email: input.email, name: input.name, role: 'employee' }
+    }, headers);
     return;
   }
   json(res, 404, { error: 'Not found' }, headers);

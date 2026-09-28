@@ -32,6 +32,7 @@ The Node server binds to `0.0.0.0`, honors Render's `PORT`, serves `/healthz`, a
 ## What is interactive
 
 - Sign in through the backend with a six-digit email OTP. Dashboards are not rendered without a valid session.
+- OAuth Server consent: Supabase redirects third-party clients to `/oauth/consent?authorization_id=...`; the page requires a Relo session, shows the client, callback URL, and scopes, then calls Supabase to approve or deny the request.
 - Employee navigation: home, checklist, explore, saved, requests, and profile.
 - Complete checklist items to update progress.
 - Filter/search directory items, open details, save items, and submit a consent-based request.
@@ -41,4 +42,4 @@ The Node server binds to `0.0.0.0`, honors Render's `PORT`, serves `/healthz`, a
 
 ## Prototype boundary
 
-The UI state is still intentionally lightweight, but authentication, AARRR data, and admin events now cross a real backend boundary. Supabase stores users, profiles, role, tenant membership, relocation cases, platform events, and metrics with RLS. Configure a real SMTP provider and an OTP email template containing `{{ .Token }}` in Supabase Auth before production.
+The UI state is still intentionally lightweight, but authentication, AARRR data, admin events, and the OAuth consent surface now cross real service boundaries. Supabase stores users, profiles, role, tenant membership, relocation cases, platform events, and metrics with RLS. Configure a real SMTP provider and an OTP email template containing `{{ .Token }}` in Supabase Auth before production. In Supabase Authentication → OAuth Server, set the Authorization path to `/oauth/consent` and use the deployed frontend URL as the Site URL. OAuth consent calls stay behind the backend bearer-token boundary; no service-role key is exposed to the browser.

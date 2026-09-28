@@ -8,9 +8,11 @@ const listings = [
 ];
 
 const state = {
-  auth: { loggedIn: false, user: null, token: null, error: '', email: '', otpEmail: '', otpStep: 'request' },
+  auth: { loggedIn: false, user: null, token: null, refreshToken: '', error: '', email: '', otpEmail: '', otpStep: 'request' },
+  oauth: { authorizationId: '', details: null, loading: false, error: '', decisionBusy: false },
   growth: null,
   adminEvents: [],
+  adminInvite: { error: '', notice: '', busy: false },
   adminFilter: { category: '', severity: '' },
   role: 'employee',
   view: 'home',
@@ -34,6 +36,14 @@ const state = {
 const app = document.querySelector('#app');
 const API_BASE_URL = window.RELO_CONFIG?.apiBaseUrl || 'http://127.0.0.1:4100';
 
+function isOAuthConsentRoute() {
+  return window.location.pathname === '/oauth/consent' || window.location.pathname === '//oauth/consent';
+}
+
+function oauthClientConfigured() {
+  return Boolean(window.ReloOAuth);
+}
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
 }
@@ -51,7 +61,7 @@ function navItems() {
       ]
     : state.role === 'admin'
       ? [
-          ['events', '◉', 'Major events'], ['organizations', '◎', 'Organizations'], ['security', '⌁', 'Security'],
+          ['events', '◉', 'Major events'], ['people', '◎', 'People'], ['organizations', '◎', 'Organizations'], ['security', '⌁', 'Security'],
           ['settings', '⚙', 'Settings']
         ]
     : [
@@ -66,6 +76,7 @@ function initials(user) {
 
 function renderLogin() {
   const verifying = state.auth.otpStep === 'verify';
+  const oauthLogin = isOAuthConsentRoute();
   app.innerHTML = `
     <main class="login-shell">
       <section class="login-story">
@@ -83,9 +94,9 @@ function renderLogin() {
         <p class="story-note">Designed for the people moving — and the teams helping them get there.</p>
       </section>
       <section class="login-card">
-        <div class="login-panel-heading"><span class="eyebrow">${verifying ? 'Check your inbox' : 'Welcome back'}</span><span class="secure-note"><span class="secure-dot"></span>Passwordless access</span></div>
-        <h2>${verifying ? 'Enter your sign-in code.' : 'Pick up where you left off.'}</h2>
-        <p class="login-panel-copy">${verifying ? `We sent a six-digit code to <strong>${escapeHtml(state.auth.otpEmail)}</strong>.` : 'Sign in with your work email. Relo will send a one-time code through your company SMTP setup.'}</p>
+        <div class="login-panel-heading"><span class="eyebrow">${verifying ? 'Check your inbox' : oauthLogin ? 'Authorize an application' : 'Welcome back'}</span><span class="secure-note"><span class="secure-dot"></span>Passwordless access</span></div>
+        <h2>${verifying ? 'Enter your sign-in code.' : oauthLogin ? 'Sign in to continue.' : 'Pick up where you left off.'}</h2>
+        <p class="login-panel-copy">${verifying ? `We sent a six-digit code to <strong>${escapeHtml(state.auth.otpEmail)}</strong>.` : oauthLogin ? 'Sign in to review the application, requested permissions, and redirect destination before continuing.' : 'Sign in with your work email. Relo will send a one-time code through your company SMTP setup.'}</p>
         <form id="otp-form" class="login-form">
           ${verifying ? `<div class="field"><label for="otp-code">One-time code</label><input id="otp-code" class="otp-code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required placeholder="000000" /></div>` : `<div class="field"><label for="login-email">Work email</label><input id="login-email" type="email" autocomplete="email" required placeholder="you@company.com" value="${escapeHtml(state.auth.email || '')}" /></div>`}
           ${state.auth.error ? `<div class="login-error" role="alert">${escapeHtml(state.auth.error)}</div>` : ''}
@@ -93,11 +104,7 @@ function renderLogin() {
         </form>
         ${verifying ? `<button class="otp-back" data-otp-reset>Use a different email</button>` : ''}
         <div class="login-divider"><span>${verifying ? 'Code not arriving?' : 'Configured access'}</span></div>
-        <div class="login-demo-grid">
-          <button class="login-demo" data-demo-login="employee"><span class="demo-icon">↗</span><span><strong>Employee</strong><small>Fill employee email</small></span></button>
-          <button class="login-demo" data-demo-login="hr"><span class="demo-icon">◒</span><span><strong>HR / admin</strong><small>Fill HR email</small></span></button>
-        </div>
-        <p class="login-footnote">Only provisioned accounts can request a code. Email delivery is handled by the Supabase SMTP configuration.</p>
+        <p class="login-footnote">Only provisioned accounts can request a code. Admin and HR access is managed directly through the database; employee access is issued by an administrator.</p>
       </section>
     </main>`;
 }
@@ -201,7 +208,7 @@ function renderHr() {
 }
 
 function renderHrDashboard() {
-  return `<div class="page-heading hr-heading"><div><div class="eyebrow">Mobility programme · Q4</div><h1>See the whole programme, at a glance.</h1></div><div><p>Understand who is moving, where support is needed, and which moments are creating momentum.</p><button class="button button-primary" data-open-invite>Invite an employee <span class="button-arrow">↗</span></button></div></div><div class="stat-row"><div class="stat"><strong>42</strong><span>Active relocations</span><span class="trend">↑ 8% this month</span></div><div class="stat"><strong>8</strong><span>Invitations pending</span><span class="trend">3 need a nudge</span></div><div class="stat"><strong>71%</strong><span>Average progress</span><span class="trend">↑ 4 pts this month</span></div></div>${renderAarrr()}<div class="dashboard-grid" style="margin-top:22px"><section class="panel panel-pad"><div class="panel-heading"><div><h2>Recent employees</h2><p>Operational view · private notes stay private</p></div><button class="text-link" data-nav="employees">View all employees</button></div>${employeeTable()}</section><aside class="stack"><section class="panel panel-pad"><div class="panel-heading"><div><h3>Needs attention</h3><p>Small interventions, earlier.</p></div></div><div class="attention-list"><div class="attention"><span class="attention-mark"></span><div><strong>3 invitations are still unopened</strong><p>Send a gentle reminder before their start date.</p></div></div><div class="attention"><span class="attention-mark"></span><div><strong>5 requests await acknowledgement</strong><p>Example Movers and four others need a response.</p></div></div></div></section><section class="panel panel-pad"><div class="panel-heading"><div><h3>Programme pulse</h3><p>Relo starter programme</p></div></div><div class="progress-track"><div class="progress-fill" style="width:71%; background:var(--mint-deep)"></div></div><div class="progress-footer" style="color:var(--ink-soft)"><span>71% complete</span><span>42 cases</span></div></section></aside></div>`;
+  return `<div class="page-heading hr-heading"><div><div class="eyebrow">Mobility programme · Q4</div><h1>See the whole programme, at a glance.</h1></div><div><p>Understand who is moving, where support is needed, and which moments are creating momentum.</p></div></div><div class="stat-row"><div class="stat"><strong>42</strong><span>Active relocations</span><span class="trend">↑ 8% this month</span></div><div class="stat"><strong>8</strong><span>Invitations pending</span><span class="trend">3 need a nudge</span></div><div class="stat"><strong>71%</strong><span>Average progress</span><span class="trend">↑ 4 pts this month</span></div></div>${renderAarrr()}<div class="dashboard-grid" style="margin-top:22px"><section class="panel panel-pad"><div class="panel-heading"><div><h2>Recent employees</h2><p>Operational view · private notes stay private</p></div><button class="text-link" data-nav="employees">View all employees</button></div>${employeeTable()}</section><aside class="stack"><section class="panel panel-pad"><div class="panel-heading"><div><h3>Needs attention</h3><p>Small interventions, earlier.</p></div></div><div class="attention-list"><div class="attention"><span class="attention-mark"></span><div><strong>3 invitations are still unopened</strong><p>Send a gentle reminder before their start date.</p></div></div><div class="attention"><span class="attention-mark"></span><div><strong>5 requests await acknowledgement</strong><p>Example Movers and four others need a response.</p></div></div></div></section><section class="panel panel-pad"><div class="panel-heading"><div><h3>Programme pulse</h3><p>Relo starter programme</p></div></div><div class="progress-track"><div class="progress-fill" style="width:71%; background:var(--mint-deep)"></div></div><div class="progress-footer" style="color:var(--ink-soft)"><span>71% complete</span><span>42 cases</span></div></section></aside></div>`;
 }
 
 const defaultAarrr = {
@@ -222,15 +229,20 @@ function employeeTable() {
   return `<div class="table-wrap"><table><thead><tr><th>Employee</th><th>Destination</th><th>Move date</th><th>Progress</th><th>Status</th></tr></thead><tbody>${employees.map(([name, city, date, value, status]) => `<tr><td><strong>${name}</strong><span>${name === 'Rohan Verma' ? 'Senior Analyst' : 'Programme member'}</span></td><td>${city}</td><td>${date}</td><td><div class="mini-progress"><div class="mini-progress-track"><div class="mini-progress-fill" style="width:${value}%"></div></div><span>${value}%</span></div></td><td><span class="badge ${status === 'Pending' ? 'pending' : 'active'}">${status}</span></td></tr>`).join('')}</tbody></table></div>`;
 }
 
-function renderHrEmployees() { return `<div class="page-heading"><div><div class="eyebrow">People in motion</div><h1>Employees.</h1></div><p>Progress, dates, and the next operational step — without opening private employee notes.</p><button class="button button-primary" data-open-invite>Invite an employee</button></div><section class="panel panel-pad"><div class="panel-heading"><div><h2>All relocations</h2><p>42 active · 8 pending</p></div><button class="button button-quiet button-small" data-toast="Export queued with tenant-scoped audit logging.">Export report</button></div>${employeeTable()}</section>`; }
+function renderHrEmployees() { return `<div class="page-heading"><div><div class="eyebrow">People in motion</div><h1>Employees.</h1></div><p>Progress, dates, and the next operational step — without opening private employee notes.</p></div><section class="panel panel-pad"><div class="panel-heading"><div><h2>All relocations</h2><p>42 active · 8 pending</p></div><button class="button button-quiet button-small" data-toast="Export queued with tenant-scoped audit logging.">Export report</button></div>${employeeTable()}</section>`; }
 function renderHrPrograms() { return `<div class="page-heading"><div><div class="eyebrow">Reusable operating rhythm</div><h1>Programmes.</h1></div><p>Versioned checklists and allowances help every employee receive the same thoughtful start.</p></div><div class="dashboard-grid"><section class="panel panel-pad"><div class="panel-heading"><div><h2>Relo starter programme</h2><p>Active · 42 employees · Updated 01 Sep 2026</p></div><span class="badge active">Published</span></div><div class="checklist"><div class="check-item"><div class="activity-icon">✓</div><div class="check-copy"><strong>Confirm move date</strong><span>Required · before you move</span></div><span class="check-status complete">Required</span></div><div class="check-item"><div class="activity-icon">✓</div><div class="check-copy"><strong>Choose office area</strong><span>Recommended · before you move</span></div><span class="check-status recommended">Recommended</span></div><div class="check-item"><div class="activity-icon">↗</div><div class="check-copy"><strong>Request moving support</strong><span>Optional · before you move</span></div><span class="check-status">Optional</span></div></div></section><section class="panel panel-pad"><div class="panel-heading"><div><h3>Allowance</h3><p>Shared with each employee on invite</p></div></div><div class="stat"><strong>₹75,000</strong><span>Default relocation allowance</span><span class="trend">Version 3 · active</span></div></section></div>`; }
 function renderHrContent() { return `<div class="page-heading"><div><div class="eyebrow">Trust is a workflow</div><h1>Content review.</h1></div><p>Keep local recommendations useful, current, and honest about what Relo can stand behind.</p></div><section class="panel panel-pad"><div class="panel-heading"><div><h2>Review queue</h2><p>4 items need a reviewer · 28 published items</p></div><button class="button button-quiet button-small" data-toast="Content import is represented locally in this prototype.">Import source</button></div><div class="attention-list"><div class="attention"><span class="attention-mark" style="background:var(--sun)"></span><div><strong>Neighborhood guide · Indiranagar</strong><p>Freshness check due in 2 days · source: mobility team</p></div><span class="badge pending">Review</span></div><div class="attention"><span class="attention-mark" style="background:var(--sun)"></span><div><strong>MoveRight concierge</strong><p>Verification evidence updated · reviewer needed</p></div><span class="badge pending">Review</span></div><div class="attention"><span class="attention-mark" style="background:var(--mint-deep)"></span><div><strong>Example Movers</strong><p>Verified this month · published</p></div><span class="badge active">Published</span></div></div></section>`; }
 function renderHrReports() { return `<div class="page-heading"><div><div class="eyebrow">Signals, not surveillance</div><h1>Reports.</h1></div><p>Understand whether relocation support is helping people get settled, without turning the workspace into a monitoring tool.</p></div><div class="stat-row"><div class="stat"><strong>12d</strong><span>Average time to first action</span><span class="trend">↓ 2 days this quarter</span></div><div class="stat"><strong>86%</strong><span>Invitation acceptance</span><span class="trend">↑ 9 pts this quarter</span></div><div class="stat"><strong>4.7/5</strong><span>Employee helpfulness score</span><span class="trend">Based on 27 responses</span></div></div><section class="panel panel-pad" style="margin-top:22px"><div class="panel-heading"><div><h2>What employees use</h2><p>Aggregate activity · last 30 days</p></div></div><div class="checklist"><div class="check-item"><div class="activity-icon">⌂</div><div class="check-copy"><strong>Housing recommendations</strong><span>Most visited content category</span></div><strong>68%</strong></div><div class="check-item"><div class="activity-icon">↗</div><div class="check-copy"><strong>Moving-service requests</strong><span>Requests that received acknowledgement</span></div><strong>92%</strong></div><div class="check-item"><div class="activity-icon">✓</div><div class="check-copy"><strong>Checklist completion</strong><span>Employees completing at least one step</span></div><strong>81%</strong></div></div></section>`; }
 function renderHrSettings() { return `<div class="page-heading"><div><div class="eyebrow">Control the defaults</div><h1>Settings.</h1></div><p>Manage programme defaults and access. Employee privacy stays the default, not a preference someone has to discover.</p></div><section class="panel panel-pad"><div class="panel-heading"><div><h2>Workspace settings</h2><p>Relo starter programme</p></div></div><div class="checklist"><div class="check-item"><div class="activity-icon">◌</div><div class="check-copy"><strong>Employee notes</strong><span>Private by default · HR sees operational statuses only</span></div><span class="badge active">On</span></div><div class="check-item"><div class="activity-icon">♢</div><div class="check-copy"><strong>Reminder cadence</strong><span>One nudge at 7 days, one at 2 days</span></div><button class="button button-quiet button-small" data-toast="Reminder settings are represented in the prototype.">Edit</button></div><div class="check-item"><div class="activity-icon">⌁</div><div class="check-copy"><strong>Single sign-on</strong><span>Managed by your identity provider</span></div><span class="badge active">Connected</span></div></div></section>`; }
 
 function renderAdmin() {
-  const views = { events: renderAdminEvents, organizations: renderAdminOrganizations, security: renderAdminSecurity, settings: renderAdminSettings };
+  const views = { events: renderAdminEvents, people: renderAdminPeople, organizations: renderAdminOrganizations, security: renderAdminSecurity, settings: renderAdminSettings };
   return (views[state.view] || renderAdminEvents)();
+}
+
+function renderAdminPeople() {
+  const invite = state.adminInvite;
+  return `<div class="page-heading"><div><div class="eyebrow">Provisioned access · admin only</div><h1>People.</h1></div><p>Invite employees from the control plane. Admin and HR roles are intentionally managed through the database, never through this portal.</p></div><section class="panel panel-pad"><div class="panel-heading"><div><h2>Invite an employee</h2><p>The employee will receive an email invitation and can then use passwordless OTP access.</p></div><span class="badge active">Employee only</span></div><form id="admin-invite-form" class="form-grid"><div class="field"><label for="admin-invite-name">Employee name</label><input id="admin-invite-name" required placeholder="e.g. Rohan Verma" /></div><div class="field"><label for="admin-invite-email">Work email</label><input id="admin-invite-email" type="email" required placeholder="name@company.com" /></div>${invite.error ? `<div class="login-error" role="alert">${escapeHtml(invite.error)}</div>` : ''}${invite.notice ? `<div class="form-notice" role="status">${escapeHtml(invite.notice)}</div>` : ''}<div><button class="button button-primary" type="submit" ${invite.busy ? 'disabled' : ''}>${invite.busy ? 'Sending invitation…' : 'Send employee invitation'} <span class="button-arrow">↗</span></button></div></form></section><section class="panel panel-pad"><div class="panel-heading"><div><h2>Role policy</h2><p>Elevated access stays outside the portal.</p></div></div><div class="checklist"><div class="check-item"><div class="activity-icon">◎</div><div class="check-copy"><strong>Employee</strong><span>Invite from this dashboard; role is fixed server-side.</span></div><span class="badge active">Available</span></div><div class="check-item"><div class="activity-icon">⌁</div><div class="check-copy"><strong>HR and admin</strong><span>Add and promote through the Supabase database workflow.</span></div><span class="badge pending">DB only</span></div></div></section>`;
 }
 
 function adminEventTime(value) {
@@ -262,14 +274,23 @@ function renderModal() {
     const item = listings.find((listing) => listing.id === state.modal.listingId);
     return `<div class="modal-backdrop" data-close-modal><div class="modal" role="dialog" aria-modal="true" aria-labelledby="request-title" onclick="event.stopPropagation()"><div class="modal-header"><div><h2 id="request-title">Request help from ${item.title}</h2><p>You choose exactly what leaves your Relo workspace.</p></div><button class="close-button" aria-label="Close" data-close-modal>×</button></div><form id="request-form"><div class="form-grid"><div class="field"><label for="request-message">What would make this useful?</label><textarea id="request-message" placeholder="I’m looking for..."></textarea></div><label class="consent"><input id="request-consent" type="checkbox" required><span>I consent to share my name, preferred contact method, destination city, and target move date with this provider for this request.</span></label></div><div class="modal-actions"><button class="button button-quiet" type="button" data-close-modal>Cancel</button><button class="button button-dark" type="submit">Send request</button></div></form></div></div>`;
   }
-  if (state.modal?.type === 'invite') {
-    return `<div class="modal-backdrop" data-close-modal><div class="modal" role="dialog" aria-modal="true" aria-labelledby="invite-title" onclick="event.stopPropagation()"><div class="modal-header"><div><h2 id="invite-title">Invite an employee</h2><p>The employee will receive a single-use link to begin their relocation.</p></div><button class="close-button" aria-label="Close" data-close-modal>×</button></div><form id="invite-form"><div class="form-grid"><div class="field"><label for="invite-name">Employee name</label><input id="invite-name" required placeholder="e.g. Rohan Verma" /></div><div class="field"><label for="invite-email">Work email</label><input id="invite-email" type="email" required placeholder="name@company.com" /></div><div class="field"><label for="invite-city">Destination</label><select id="invite-city"><option>Bangalore</option><option>Hyderabad</option><option>Pune</option></select></div></div><div class="modal-actions"><button class="button button-quiet" type="button" data-close-modal>Cancel</button><button class="button button-primary" type="submit">Send invitation</button></div></form></div></div>`;
-  }
   if (state.modal?.type === 'listing') {
     const item = listings.find((listing) => listing.id === state.modal.listingId);
     return `<div class="modal-backdrop" data-close-modal><div class="modal" role="dialog" aria-modal="true" aria-labelledby="listing-title" onclick="event.stopPropagation()"><div class="modal-header"><div><span class="verified">Verified</span><h2 id="listing-title">${item.title}</h2><p>${item.description}</p></div><button class="close-button" aria-label="Close" data-close-modal>×</button></div><div class="consent"><span><strong>Why this is here:</strong> ${item.meta}. ${item.freshness}. The listing is curated for your employer programme and does not guarantee an outcome.</span></div><div class="modal-actions"><button class="button button-quiet" data-save="${item.id}">${state.saved.has(item.id) ? 'Remove from saved' : 'Save for later'}</button><button class="button button-dark" data-request="${item.id}">Request contact</button></div></div></div>`;
   }
   return '';
+}
+
+function renderOAuthConsent() {
+  const oauth = state.oauth;
+  if (oauth.loading) {
+    return `<main class="oauth-shell"><section class="oauth-card"><div class="brand oauth-brand"><span class="brand-mark">r</span><span class="brand-name">relo</span></div><span class="eyebrow">Secure authorization</span><h1>Checking the request.</h1><p class="oauth-muted">We’re validating the connected application and its requested access.</p><div class="oauth-loader" aria-label="Loading"></div></section></main>`;
+  }
+  if (oauth.error || !oauth.details) {
+    return `<main class="oauth-shell"><section class="oauth-card"><div class="brand oauth-brand"><span class="brand-mark">r</span><span class="brand-name">relo</span></div><span class="eyebrow">Authorization unavailable</span><h1>We couldn’t load this request.</h1><div class="login-error" role="alert">${escapeHtml(oauth.error || 'The authorization request is incomplete or expired.')}</div><button class="button button-dark" data-oauth-back>Return to Relo</button></section></main>`;
+  }
+  const { clientName, clientUri, redirectUri, scopes } = oauth.details;
+  return `<main class="oauth-shell"><section class="oauth-card" aria-labelledby="oauth-title"><div class="brand oauth-brand"><span class="brand-mark">r</span><span class="brand-name">relo</span></div><span class="eyebrow">Connected application</span><h1 id="oauth-title">Allow ${escapeHtml(clientName)} to connect?</h1><p class="oauth-muted">You’re signed in as <strong>${escapeHtml(state.auth.user?.email || '')}</strong>. Review the details before continuing.</p><div class="oauth-client"><span class="oauth-client-mark">${escapeHtml(clientName.slice(0, 1).toUpperCase())}</span><div><strong>${escapeHtml(clientName)}</strong>${clientUri ? `<a href="${escapeHtml(clientUri)}" target="_blank" rel="noreferrer">${escapeHtml(clientUri)}</a>` : '<span>Connected through Relo</span>'}</div></div><div class="oauth-section"><span class="eyebrow">It will return you to</span><code>${escapeHtml(redirectUri || 'The registered callback URL')}</code></div><div class="oauth-section"><span class="eyebrow">Requested access</span><ul class="oauth-scope-list">${(scopes.length ? scopes : ['basic account identity']).map((scope) => `<li><span>✓</span>${escapeHtml(scope)}</li>`).join('')}</ul></div>${oauth.error ? `<div class="login-error" role="alert">${escapeHtml(oauth.error)}</div>` : ''}<div class="oauth-actions"><button class="button button-quiet oauth-deny" data-oauth-decision="deny" ${oauth.decisionBusy ? 'disabled' : ''}>Deny</button><button class="button button-dark" data-oauth-decision="approve" ${oauth.decisionBusy ? 'disabled' : ''}>${oauth.decisionBusy ? 'Processing…' : 'Approve access'} <span class="button-arrow">↗</span></button></div><p class="oauth-note">Relo uses Supabase OAuth Server to issue the authorization code. Your password and one-time codes are never shared with this application.</p></section></main>`;
 }
 
 function navigate(view) {
@@ -287,22 +308,73 @@ function showToast(message) {
 
 function persistSession() {
   if (state.auth.loggedIn) {
-    sessionStorage.setItem('reloSession', JSON.stringify({ user: state.auth.user, token: state.auth.token }));
+    sessionStorage.setItem('reloSession', JSON.stringify({ user: state.auth.user, token: state.auth.token, refreshToken: state.auth.refreshToken }));
   } else {
     sessionStorage.removeItem('reloSession');
   }
 }
 
-function setSession(user, token) {
-  state.auth = { loggedIn: true, user, token, error: '', email: '', otpEmail: '', otpStep: 'request' };
+function setSession(user, token, refreshToken = '') {
+  state.auth = { loggedIn: true, user, token, refreshToken, error: '', email: '', otpEmail: '', otpStep: 'request' };
   state.role = user.role === 'employee' ? 'employee' : user.role === 'admin' ? 'admin' : 'hr';
   state.view = state.role === 'employee' ? 'home' : state.role === 'admin' ? 'events' : 'dashboard';
   state.growth = null;
   state.adminEvents = [];
+  state.oauth = { authorizationId: '', details: null, loading: false, error: '', decisionBusy: false };
   persistSession();
   render();
   if (state.role === 'hr') loadGrowth();
   if (state.role === 'admin') loadAdminEvents();
+  if (isOAuthConsentRoute()) loadOAuthConsent();
+}
+
+async function loadOAuthConsent() {
+  if (!isOAuthConsentRoute()) return;
+  const authorizationId = new URLSearchParams(window.location.search).get('authorization_id') || '';
+  state.oauth = { authorizationId, details: null, loading: true, error: '', decisionBusy: false };
+  render();
+  if (!authorizationId) {
+    state.oauth.loading = false;
+    state.oauth.error = 'Missing authorization_id. Start the connection again from the requesting application.';
+    render();
+    return;
+  }
+  try {
+    if (!oauthClientConfigured()) throw new Error('OAuth consent is not configured on this deployment.');
+    const response = await fetch(`${API_BASE_URL}/api/oauth/authorization-details?authorization_id=${encodeURIComponent(authorizationId)}`, { headers: { Authorization: `Bearer ${state.auth.token}` } });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Unable to validate the authorization request.');
+    const data = payload.authorization;
+    if (data?.redirect_url && !data.authorization_id) {
+      window.location.assign(data.redirect_url);
+      return;
+    }
+    if (!data?.authorization_id) throw new Error('The authorization request is invalid or expired.');
+    state.oauth.details = window.ReloOAuth.normalizeAuthorizationDetails(data);
+  } catch (error) {
+    state.oauth.error = error.message || 'Unable to validate the authorization request.';
+  }
+  state.oauth.loading = false;
+  render();
+}
+
+async function decideOAuth(decision) {
+  if (!state.oauth.authorizationId || !oauthClientConfigured()) return;
+  state.oauth.decisionBusy = true;
+  state.oauth.error = '';
+  render();
+  try {
+    const endpoint = decision === 'approve' ? '/api/oauth/approve' : '/api/oauth/deny';
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.auth.token}` }, body: JSON.stringify({ authorizationId: state.oauth.authorizationId }) });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Unable to complete the authorization decision.');
+    if (!payload.redirectUrl) throw new Error('Supabase did not provide a return URL for this decision.');
+    window.location.assign(payload.redirectUrl);
+  } catch (error) {
+    state.oauth.decisionBusy = false;
+    state.oauth.error = error.message || 'Unable to complete the authorization decision.';
+    render();
+  }
 }
 
 async function requestOtp(email) {
@@ -327,21 +399,11 @@ async function verifyOtp(token) {
     const response = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: state.auth.otpEmail, token }) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Unable to verify the sign-in code');
-    setSession(data.user, data.token);
+    setSession(data.user, data.token, data.refreshToken);
   } catch (error) {
     state.auth.error = error.message === 'Failed to fetch' ? 'The auth service is unavailable. Check the deployment.' : error.message;
     render();
   }
-}
-
-function demoLogin(role) {
-  const email = role === 'admin' ? 'nitinch131@gmail.com' : role === 'hr' ? 'ananya@demo.relo' : 'rohan@demo.relo';
-  state.auth.email = email;
-  state.auth.error = '';
-  state.auth.otpStep = 'request';
-  state.auth.otpEmail = '';
-  render();
-  document.querySelector('#login-email')?.focus();
 }
 
 async function loadGrowth() {
@@ -374,28 +436,55 @@ async function loadAdminEvents() {
   }
 }
 
+async function inviteEmployee(name, email) {
+  state.adminInvite = { error: '', notice: '', busy: true };
+  render();
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/admin/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${state.auth.token}` },
+      body: JSON.stringify({ name, email })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Unable to invite employee');
+    state.adminInvite = { error: '', notice: `Invitation sent to ${data.user.email}.`, busy: false };
+    render();
+  } catch (error) {
+    state.adminInvite = { error: error.message, notice: '', busy: false };
+    render();
+  }
+}
+
 function logout() {
   if (state.auth.token) {
     fetch(`${API_BASE_URL}/api/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${state.auth.token}` } }).catch(() => {});
   }
-  state.auth = { loggedIn: false, user: null, token: null, error: '', email: '', otpEmail: '', otpStep: 'request' };
+  state.auth = { loggedIn: false, user: null, token: null, refreshToken: '', error: '', email: '', otpEmail: '', otpStep: 'request' };
   state.role = 'employee';
   state.view = 'home';
   state.growth = null;
   state.adminEvents = [];
+  state.adminInvite = { error: '', notice: '', busy: false };
+  state.oauth = { authorizationId: '', details: null, loading: false, error: '', decisionBusy: false };
   persistSession();
   render();
 }
 
-function render() { state.auth.loggedIn ? renderShell() : renderLogin(); }
+function render() {
+  if (isOAuthConsentRoute() && state.auth.loggedIn) {
+    app.innerHTML = renderOAuthConsent();
+    return;
+  }
+  state.auth.loggedIn ? renderShell() : renderLogin();
+}
 
 window.handleNav = (view) => navigate(view);
-window.demoLogin = demoLogin;
 window.logoutRelo = logout;
 
 app.addEventListener('click', (event) => {
-  const demoRole = event.target.closest('[data-demo-login]')?.dataset.demoLogin;
-  if (demoRole) { demoLogin(demoRole); return; }
+  const oauthDecision = event.target.closest('[data-oauth-decision]')?.dataset.oauthDecision;
+  if (oauthDecision) { decideOAuth(oauthDecision); return; }
+  if (event.target.closest('[data-oauth-back]')) { window.location.assign('/'); return; }
   if (event.target.closest('[data-otp-reset]')) { state.auth.otpStep = 'request'; state.auth.otpEmail = ''; state.auth.error = ''; render(); return; }
   if (event.target.closest('[data-logout]')) { logout(); return; }
   const role = event.target.closest('[data-role]')?.dataset.role;
@@ -414,7 +503,6 @@ app.addEventListener('click', (event) => {
   if (request) { state.modal = { type: 'request', listingId: request }; render(); return; }
   const openListing = event.target.closest('[data-open-listing]')?.dataset.openListing;
   if (openListing) { state.modal = { type: 'listing', listingId: openListing }; render(); return; }
-  if (event.target.closest('[data-open-invite]')) { state.modal = { type: 'invite' }; render(); return; }
   if (event.target.closest('[data-close-modal]')) { state.modal = null; render(); return; }
   if (event.target.closest('[data-clear-search]')) { state.search = ''; render(); return; }
   const toast = event.target.closest('[data-toast]')?.dataset.toast;
@@ -443,16 +531,15 @@ app.addEventListener('submit', (event) => {
     state.view = 'requests';
     showToast('Request sent. You can follow its next step in Requests.');
   }
-  if (event.target.id === 'invite-form') {
+  if (event.target.id === 'admin-invite-form') {
     event.preventDefault();
-    state.modal = null;
-    showToast('Invitation queued for the employee.');
+    inviteEmployee(document.querySelector('#admin-invite-name').value, document.querySelector('#admin-invite-email').value);
   }
 });
 
 try {
   const stored = JSON.parse(sessionStorage.getItem('reloSession') || 'null');
-  if (stored?.user && stored?.token) setSession(stored.user, stored.token);
+  if (stored?.user && stored?.token) setSession(stored.user, stored.token, stored.refreshToken || '');
 } catch {
   sessionStorage.removeItem('reloSession');
 }

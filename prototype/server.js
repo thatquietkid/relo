@@ -10,7 +10,9 @@ const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=u
 const compressible = new Set(Object.values(mime));
 
 http.createServer((req, res) => {
-  const requested = req.url === '/' ? '/index.html' : req.url.split('?')[0];
+  const requestPath = req.url.split('?')[0];
+  const oauthConsentPath = requestPath === '/oauth/consent' || requestPath === '//oauth/consent';
+  const requested = req.url === '/' || oauthConsentPath ? '/index.html' : requestPath;
   if (requested === '/config.js') {
     const apiBaseUrl = process.env.RELO_API_URL || 'http://127.0.0.1:4100';
     res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
