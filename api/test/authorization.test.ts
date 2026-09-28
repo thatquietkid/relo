@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FastifyRequest } from 'fastify';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createApp } from '../src/app.js';
 import type { AuthService } from '../src/identity/auth-service.js';
 import type { IdentityContext } from '../src/identity/types.js';
@@ -7,6 +8,7 @@ import type { MembershipView } from '../src/tenancy/types.js';
 import { assertTenantAccess, can, PERMISSIONS, type AuthorizationContext } from '../src/authorization/policy.js';
 import { makeAuthorizationHooks } from '../src/authorization/require-auth.js';
 import { requireRole } from '../src/authorization/require-role.js';
+import { createSupabasePort } from '../src/identity/supabase.js';
 
 function membership(
   tenantId: string,
@@ -148,6 +150,50 @@ describe('authorization policy', () => {
     }))).rejects.toMatchObject({ code: 'MEMBERSHIP_REVOKED' });
     expect(loadMemberships).toHaveBeenCalledTimes(2);
     expect(loadMemberships).toHaveBeenNthCalledWith(1, 'user-1', 'valid-token');
+  });
+
+  it('composes production-shaped RPC membership and platform lookups into tenant and tenantless contexts', async () => {
+    const rpc = vi.fn()
+      .mockResolvedValueOnce({
+        data: [membership('tenant-a'), membership('tenant-b', 'active', ['hr'])],
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: false, error: null })
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: true, error: null });
+    const createPort = vi.fn(() => createSupabasePort({ rpc } as unknown as SupabaseClient));
+
+    const tenantHooks = makeAuthorizationHooks({
+      authService: fakeAuth(identityFor('tenant-a')),
+      createSupabasePort: createPort,
+    });
+    const tenantRequest = requestWith({
+      authorization: 'Bearer valid-token',
+      'x-tenant-id': 'tenant-b',
+    });
+    await tenantHooks.requireAuth(tenantRequest);
+    expect(tenantRequest.relo?.tenantId).toBe('tenant-b');
+    expect(tenantRequest.relo?.membership?.roles[0]?.key).toBe('hr');
+
+    const platformHooks = makeAuthorizationHooks({
+      authService: fakeAuth({
+        user: { id: 'platform-user', email: 'platform@example.com' },
+        memberships: [],
+      }),
+      createSupabasePort: createPort,
+    });
+    const platformRequest = requestWith({ authorization: 'Bearer valid-token' });
+    await platformHooks.requireAuth(platformRequest);
+    expect(platformRequest.relo?.tenantId).toBeNull();
+    expect(platformRequest.relo?.membership).toBeNull();
+    expect(platformRequest.relo?.identity.platformRoles).toEqual(['platform_admin']);
+
+    expect(rpc).toHaveBeenNthCalledWith(1, 'get_authorization_memberships');
+    expect(rpc).toHaveBeenNthCalledWith(2, 'is_platform_admin');
+    expect(rpc).toHaveBeenNthCalledWith(3, 'get_authorization_memberships');
+    expect(rpc).toHaveBeenNthCalledWith(4, 'is_platform_admin');
+    expect(createPort).toHaveBeenCalledWith('valid-token');
+    expect(createPort).toHaveBeenCalledTimes(4);
   });
 
   it('denies an inactive tenant even when its membership is active', async () => {
