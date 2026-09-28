@@ -9,4 +9,5 @@ export interface IdentityContext {
   user: AuthUser;
   memberships: MembershipView[];
   platformScope?: boolean;
+  platformRoles?: string[];
 }

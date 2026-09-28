@@ -20,6 +20,8 @@ export const PERMISSIONS = {
   INVITATIONS_READ: 'invitations:read',
   INVITATIONS_WRITE: 'invitations:write',
   REPORTS_READ: 'reports:read',
+  TENANT_ADMIN_READ: 'tenant-admin:read',
+  TENANT_ADMIN_WRITE: 'tenant-admin:write',
   REVIEWER_READ: 'reviewer:read',
   REVIEWER_WRITE: 'reviewer:write',
   CONTENT_READ: 'content:read',
@@ -57,6 +59,11 @@ const HR_PERMISSIONS: readonly Permission[] = [
   PERMISSIONS.REPORTS_READ,
 ];
 
+const TENANT_ADMIN_PERMISSIONS: readonly Permission[] = [
+  PERMISSIONS.TENANT_ADMIN_READ,
+  PERMISSIONS.TENANT_ADMIN_WRITE,
+];
+
 const REVIEWER_PERMISSIONS: readonly Permission[] = [
   PERMISSIONS.REVIEWER_READ,
   PERMISSIONS.REVIEWER_WRITE,
@@ -77,6 +84,7 @@ const PLATFORM_ADMIN_PERMISSIONS: readonly Permission[] = [
 const ROLE_PERMISSIONS: Record<string, readonly Permission[]> = {
   employee: EMPLOYEE_PERMISSIONS,
   hr: HR_PERMISSIONS,
+  admin: TENANT_ADMIN_PERMISSIONS,
   reviewer: REVIEWER_PERMISSIONS,
 };
 
@@ -102,30 +110,41 @@ export function assertTenantAccess(identity: IdentityContext, tenantId: string):
   if (error) throw error;
 }
 
-export function permissionsFor(identity: IdentityContext, membership: MembershipView): Permission[] {
+export function permissionsFor(identity: IdentityContext, membership: MembershipView | null): Permission[] {
   const permissions = new Set<Permission>();
-  for (const role of membership.roles) {
-    const rolePermissions = ROLE_PERMISSIONS[role.key];
-    if (rolePermissions) rolePermissions.forEach((permission) => permissions.add(permission));
-    if (identity.platformScope === true && ['admin', 'platform_admin'].includes(role.key)) {
-      PLATFORM_ADMIN_PERMISSIONS.forEach((permission) => permissions.add(permission));
+  if (membership) {
+    for (const role of membership.roles) {
+      const rolePermissions = ROLE_PERMISSIONS[role.key];
+      if (rolePermissions) rolePermissions.forEach((permission) => permissions.add(permission));
     }
+  }
+  if (identity.platformScope === true && identity.platformRoles?.includes('platform_admin')) {
+    PLATFORM_ADMIN_PERMISSIONS.forEach((permission) => permissions.add(permission));
   }
   return [...permissions];
 }
 
-export function can(identity: IdentityContext, permission: string): boolean {
+export function can(context: AuthorizationContext, permission: string): boolean;
+export function can(identity: IdentityContext, permission: string, tenantId?: string): boolean;
+export function can(
+  identityOrContext: IdentityContext | AuthorizationContext,
+  permission: string,
+  tenantId?: string,
+): boolean {
   if (!(Object.values(PERMISSIONS) as string[]).includes(permission)) return false;
-  return identity.memberships.some((membership) => {
-    if (membership.status !== 'active' || membership.tenant.status !== 'active') return false;
-    return permissionsFor(identity, membership).includes(permission as Permission);
-  });
+  if ('identity' in identityOrContext) {
+    return identityOrContext.permissions.includes(permission as Permission);
+  }
+  if (!tenantId) return false;
+  const membership = identityOrContext.memberships.find((candidate) => candidate.tenant_id === tenantId);
+  if (!membership || membership.status !== 'active' || membership.tenant.status !== 'active') return false;
+  return permissionsFor(identityOrContext, membership).includes(permission as Permission);
 }
 
 export interface AuthorizationContext {
   identity: IdentityContext;
-  tenantId: string;
-  membership: MembershipView;
+  tenantId: string | null;
+  membership: MembershipView | null;
   permissions: Permission[];
 }
 

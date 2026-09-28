@@ -9,9 +9,12 @@ export function requireRole(...roles: string[]): RoutePreHandler {
     if (!request.relo) {
       throw new ApiError(401, 'AUTHENTICATION_REQUIRED', 'Authentication is required.');
     }
-    const requestsPlatformScope = roles.some((role) => ['admin', 'platform_admin'].includes(role));
-    const hasPlatformScope = request.relo.identity.platformScope === true;
-    if ((requestsPlatformScope && !hasPlatformScope) || !hasRole(request.relo.membership, roles)) {
+    const platformRoleRequested = roles.includes('platform_admin');
+    const tenantRoles = roles.filter((role) => role !== 'platform_admin');
+    const hasPlatformRole = request.relo.identity.platformScope === true
+      && request.relo.identity.platformRoles?.includes('platform_admin') === true;
+    const hasTenantRole = request.relo.membership !== null && hasRole(request.relo.membership, tenantRoles);
+    if (!((platformRoleRequested && hasPlatformRole) || (tenantRoles.length > 0 && hasTenantRole))) {
       throw new ApiError(403, 'ROLE_REQUIRED', 'The required role is not assigned.');
     }
   };

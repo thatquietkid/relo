@@ -40,7 +40,8 @@ export interface SupabaseAuthPort {
     signOut(accessToken: string): Promise<{ error: SupabaseError | null }>;
   };
   getActiveMemberships(userId: string): Promise<MembershipView[]>;
-  getMemberships?(userId: string): Promise<MembershipView[]>;
+  getMemberships?(): Promise<MembershipView[]>;
+  isPlatformAdmin?(): Promise<boolean>;
 }
 
 export interface SupabaseInvitationPort {
@@ -117,7 +118,7 @@ function mapMembership(row: Record<string, unknown>): MembershipView {
   };
 }
 
-async function loadMemberships(client: SupabaseClient, userId: string): Promise<MembershipView[]> {
+async function loadMembershipsFromTable(client: SupabaseClient, userId: string): Promise<MembershipView[]> {
   const { data, error } = await client
     .from('memberships')
     .select('id, tenant_id, user_id, status, joined_at, suspended_at, tenant:tenants(id, name, slug, status), membership_roles(role:roles(id, key))')
@@ -195,11 +196,18 @@ export function createSupabasePort(client: SupabaseClient, restConfig?: Supabase
         return { error: result.error };
       },
     },
-    async getMemberships(userId) {
-      return loadMemberships(client, userId);
+    async getMemberships() {
+      const { data, error } = await client.rpc('get_authorization_memberships');
+      if (error) throw error;
+      return Array.isArray(data) ? data.map((row) => mapMembership(row as Record<string, unknown>)) : [];
+    },
+    async isPlatformAdmin() {
+      const { data, error } = await client.rpc('is_platform_admin');
+      if (error) throw error;
+      return data === true;
     },
     async getActiveMemberships(userId) {
-      const memberships = await loadMemberships(client, userId);
+      const memberships = await loadMembershipsFromTable(client, userId);
       return memberships.filter((membership) => membership.status === 'active');
     },
     async acceptInvitation(userId, rawToken) {

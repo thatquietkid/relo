@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createSupabaseClient, createSupabasePort } from '../src/identity/supabase.js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 describe('Supabase bearer-bound REST ports', () => {
   it('uses the incoming bearer for OAuth details and session logout', async () => {
@@ -50,5 +51,52 @@ describe('Supabase bearer-bound REST ports', () => {
     expect(fetcher).toHaveBeenNthCalledWith(4, 'https://relo.supabase.co/auth/v1/logout?scope=local', expect.objectContaining({
       headers: expect.objectContaining({ Authorization: 'Bearer incoming-token' }),
     }));
+  });
+
+  it('loads all authorization memberships through the no-argument RPC', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [{
+        id: 'membership-active',
+        tenant_id: 'tenant-a',
+        user_id: 'user-1',
+        status: 'active',
+        joined_at: '2026-09-28T00:00:00.000Z',
+        suspended_at: null,
+        tenant: { id: 'tenant-a', name: 'Tenant A', slug: 'tenant-a', status: 'active' },
+        roles: [{ id: 'role-employee', key: 'employee' }],
+      }, {
+        id: 'membership-suspended',
+        tenant_id: 'tenant-b',
+        user_id: 'user-1',
+        status: 'suspended',
+        joined_at: '2026-09-28T00:00:00.000Z',
+        suspended_at: '2026-09-28T01:00:00.000Z',
+        tenant: { id: 'tenant-b', name: 'Tenant B', slug: 'tenant-b', status: 'active' },
+        roles: [{ id: 'role-hr', key: 'hr' }],
+      }, {
+        id: 'membership-revoked',
+        tenant_id: 'tenant-c',
+        user_id: 'user-1',
+        status: 'revoked',
+        joined_at: '2026-09-28T00:00:00.000Z',
+        suspended_at: null,
+        tenant: { id: 'tenant-c', name: 'Tenant C', slug: 'tenant-c', status: 'active' },
+        roles: [{ id: 'role-reviewer', key: 'reviewer' }],
+      }],
+      error: null,
+    });
+    const client = { rpc } as unknown as SupabaseClient;
+    const port = createSupabasePort(client);
+
+    await expect(port.getMemberships?.()).resolves.toHaveLength(3);
+    expect(rpc).toHaveBeenCalledWith('get_authorization_memberships');
+  });
+
+  it('loads trusted platform scope through the no-argument RPC', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: true, error: null });
+    const port = createSupabasePort({ rpc } as unknown as SupabaseClient);
+
+    await expect(port.isPlatformAdmin?.()).resolves.toBe(true);
+    expect(rpc).toHaveBeenCalledWith('is_platform_admin');
   });
 });

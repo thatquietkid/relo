@@ -285,7 +285,9 @@ git commit -m "feat: add OTP Google and invitation authentication"
 - `requireAuth(request): Promise<IdentityContext>` rejects missing or invalid sessions.
 - `requireRole(...roles): RoutePreHandler` checks the active membership selected for the request tenant.
 - `assertTenantAccess(identity, tenantId): void` rejects cross-tenant identifiers.
-- `can(identity, permission): boolean` resolves permissions from role keys, never from browser input.
+- `AuthorizationContext` is `{ identity, tenantId: string | null, membership: MembershipView | null, permissions }`; tenantless platform context is allowed only for trusted platform scope.
+- `can(context, permission): boolean` resolves only the selected context; the convenience overload `can(identity, permission, tenantId)` requires an explicit tenant and fails closed when omitted or cross-tenant.
+- Tenant `admin` and platform `platform_admin` are distinct roles; platform guards require both trusted platform scope and `platform_admin`.
 
 - [ ] **Step 1: Write failing authorization tests**
 

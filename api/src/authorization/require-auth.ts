@@ -15,6 +15,7 @@ export interface AuthorizationDependencies {
   authService?: AuthService;
   createSupabasePort?: (accessToken?: string) => SupabasePort;
   loadMemberships?: (userId: string, accessToken: string) => Promise<MembershipView[]>;
+  resolvePlatformScope?: (userId: string, accessToken: string) => Promise<boolean>;
 }
 
 export type RequireAuth = (request: FastifyRequest) => Promise<IdentityContext>;
@@ -44,8 +45,21 @@ async function resolveMemberships(
 
   const factory = deps.createSupabasePort ?? createSupabasePortFromEnv;
   const port = factory(accessToken);
-  if (port.getMemberships) return port.getMemberships(identity.user.id);
+  if (port.getMemberships) return port.getMemberships();
   return identity.memberships;
+}
+
+async function resolvePlatformScope(
+  deps: AuthorizationDependencies,
+  identity: IdentityContext,
+  accessToken: string,
+): Promise<boolean> {
+  if (deps.resolvePlatformScope) return deps.resolvePlatformScope(identity.user.id, accessToken);
+  if (deps.authService && !deps.createSupabasePort) return identity.platformScope === true;
+  const factory = deps.createSupabasePort ?? createSupabasePortFromEnv;
+  const port = factory(accessToken);
+  if (port.isPlatformAdmin) return port.isPlatformAdmin();
+  return identity.platformScope === true;
 }
 
 function tenantHeader(request: FastifyRequest): string | null {
@@ -53,11 +67,13 @@ function tenantHeader(request: FastifyRequest): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-function selectMembership(identity: IdentityContext, requestedTenantId: string | null): MembershipView {
+function selectMembership(identity: IdentityContext, requestedTenantId: string | null): MembershipView | null {
   if (requestedTenantId) {
     assertTenantAccess(identity, requestedTenantId);
     return identity.memberships.find((membership) => membership.tenant_id === requestedTenantId)!;
   }
+
+  if (identity.platformScope === true) return null;
 
   const activeMemberships = identity.memberships.filter(
     (membership) => membership.status === 'active' && membership.tenant.status === 'active',
@@ -66,6 +82,13 @@ function selectMembership(identity: IdentityContext, requestedTenantId: string |
     throw new ApiError(400, 'TENANT_SELECTION_REQUIRED', 'Select a tenant before continuing.');
   }
   if (activeMemberships.length === 1) return activeMemberships[0];
+
+  const inactiveTenant = identity.memberships.find(
+    (membership) => membership.status === 'active' && membership.tenant.status !== 'active',
+  );
+  if (inactiveTenant) {
+    assertMembershipActive(inactiveTenant);
+  }
 
   const suspended = identity.memberships.find((membership) => membership.status === 'suspended');
   if (suspended) {
@@ -98,11 +121,23 @@ export function makeAuthorizationHooks(deps: AuthorizationDependencies = {}): { 
       throw new ApiError(503, 'MEMBERSHIP_LOOKUP_FAILED', 'Unable to resolve tenant membership.');
     }
 
-    const resolvedIdentity: IdentityContext = { ...identity, memberships };
+    let platformScope: boolean;
+    try {
+      platformScope = await resolvePlatformScope(deps, identity, accessToken);
+    } catch {
+      throw new ApiError(503, 'PLATFORM_SCOPE_LOOKUP_FAILED', 'Unable to resolve platform authorization.');
+    }
+
+    const resolvedIdentity: IdentityContext = {
+      ...identity,
+      memberships,
+      platformScope,
+      ...(platformScope ? { platformRoles: ['platform_admin'] } : {}),
+    };
     const membership = selectMembership(resolvedIdentity, tenantHeader(request));
     const context: AuthorizationContext = {
       identity: resolvedIdentity,
-      tenantId: membership.tenant_id,
+      tenantId: membership?.tenant_id ?? null,
       membership,
       permissions: permissionsFor(resolvedIdentity, membership),
     };
