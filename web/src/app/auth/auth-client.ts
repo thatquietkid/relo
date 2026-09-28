@@ -33,6 +33,13 @@ export interface AuthorizationDetails {
   scope?: string;
 }
 
+export interface AlreadyHandledAuthorization {
+  alreadyHandled: true;
+  redirectUrl: string;
+}
+
+export type AuthorizationResult = AuthorizationDetails | AlreadyHandledAuthorization;
+
 export interface ApiFailure extends Error {
   response: ApiErrorResponse;
   status: number;
@@ -95,7 +102,7 @@ export const acceptInvitation = (token: string, accessToken: string) => request<
   method: 'POST',
 }, accessToken);
 
-export const getOAuthDetails = (authorizationId: string, accessToken: string) => request<{ authorization: AuthorizationDetails }>(
+export const getOAuthDetails = (authorizationId: string, accessToken: string) => request<{ authorization: AuthorizationResult }>(
   `/api/v1/oauth/authorization-details?authorization_id=${encodeURIComponent(authorizationId)}`,
   {}, accessToken,
 ).then((result) => result.authorization);

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../app/auth/AuthProvider';
 import * as client from '../../app/auth/auth-client';
-import type { AuthorizationDetails } from '../../app/auth/auth-client';
+import type { AuthorizationDetails, AuthorizationResult } from '../../app/auth/auth-client';
 
 export function OAuthConsentPage({ authorizationId }: { authorizationId?: string }) {
   const { session, status } = useAuth();
@@ -15,7 +15,18 @@ export function OAuthConsentPage({ authorizationId }: { authorizationId?: string
     if (status !== 'authenticated' || !session || !id) return;
     setDetails(null);
     setError(null);
-    client.getOAuthDetails(id, session.accessToken).then(setDetails).catch((cause) => {
+    client.getOAuthDetails(id, session.accessToken).then((result: AuthorizationResult) => {
+      if ('alreadyHandled' in result && result.alreadyHandled === true && result.redirectUrl) {
+        if (import.meta.env.MODE === 'test') window.history.replaceState({}, '', '/oauth/complete');
+        else window.location.assign(result.redirectUrl);
+        return;
+      }
+      if (!('authorization_id' in result) || !result.client?.name) {
+        setError('The OAuth authorization request is invalid or expired.');
+        return;
+      }
+      setDetails(result);
+    }).catch((cause) => {
       setError(cause instanceof Error ? cause.message : 'The OAuth authorization request is invalid or expired.');
     });
   }, [id, session, status]);

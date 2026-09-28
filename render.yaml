@@ -1,17 +1,17 @@
 services:
   - type: web
-    name: relo-prototype
+    name: relo-web
     runtime: docker
     region: singapore
     plan: free
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./web/Dockerfile
     dockerContext: .
     healthCheckPath: /healthz
     autoDeployTrigger: commit
     envVars:
       - key: NODE_ENV
         value: production
-      - key: RELO_API_URL
+      - key: VITE_RELO_API_URL
         value: https://relo-backend-7rui.onrender.com
 
   - type: web
@@ -27,7 +27,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: FRONTEND_ORIGIN
-        value: https://relo-prototype.onrender.com
+        value: https://relo-web.onrender.com
       - key: SUPABASE_URL
         value: https://rxmkcjjiyrteooztynsr.supabase.co
       - key: SUPABASE_PUBLISHABLE_KEY

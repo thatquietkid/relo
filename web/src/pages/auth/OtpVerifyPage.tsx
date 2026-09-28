@@ -13,7 +13,8 @@ export function OtpVerifyPage({ email, onBack }: { email: string; onBack?: () =>
     setError(null);
     try {
       await verifyOtp(email, code);
-      const returnTo = sessionStorage.getItem('relo.returnTo');
+      const storedReturnTo = sessionStorage.getItem('relo.returnTo');
+      const returnTo = storedReturnTo?.startsWith('/') && !storedReturnTo.startsWith('//') ? storedReturnTo : null;
       sessionStorage.removeItem('relo.returnTo');
       window.history.replaceState({}, '', returnTo || '/');
       window.dispatchEvent(new PopStateEvent('popstate'));

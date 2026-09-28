@@ -10,6 +10,8 @@ export interface AuthContextValue {
   requestOtp: (email: string) => Promise<void>;
   verifyOtp: (email: string, token: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  refreshIdentity: () => Promise<void>;
+  completeOAuthCallback: (session: WebSession) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -69,6 +71,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('authenticated');
   }, []);
 
+  const refreshIdentity = useCallback(async () => {
+    if (!session) return;
+    const nextIdentity = await client.getCurrentIdentity(session.accessToken);
+    setIdentity(nextIdentity);
+    setStatus('authenticated');
+  }, [session]);
+
+  const completeOAuthCallback = useCallback(async (callbackSession: WebSession) => {
+    const nextIdentity = await client.getCurrentIdentity(callbackSession.accessToken);
+    storeSession(callbackSession);
+    setSession(callbackSession);
+    setIdentity(nextIdentity);
+    setStatus('authenticated');
+  }, []);
+
   const signInWithGoogle = useCallback(async () => {
     const result = await client.startGoogleSignIn(`${window.location.origin}/auth/callback`);
     if (import.meta.env.MODE === 'test') window.history.replaceState({}, '', '/auth/callback');
@@ -77,15 +94,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     const current = session;
-    if (current) await client.logout(current.accessToken);
     storeSession(null);
     setSession(null);
     setIdentity(null);
     setStatus('unauthenticated');
+    try {
+      if (current) await client.logout(current.accessToken);
+    } catch {
+      // Local sign-out is authoritative for the browser even if the upstream call fails.
+    }
   }, [session]);
 
-  const value = useMemo(() => ({ session, identity, status, requestOtp, verifyOtp, signInWithGoogle, signOut }), [
-    session, identity, status, requestOtp, verifyOtp, signInWithGoogle, signOut,
+  const value = useMemo(() => ({ session, identity, status, requestOtp, verifyOtp, signInWithGoogle, refreshIdentity, completeOAuthCallback, signOut }), [
+    session, identity, status, requestOtp, verifyOtp, signInWithGoogle, refreshIdentity, completeOAuthCallback, signOut,
   ]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

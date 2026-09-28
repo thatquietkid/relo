@@ -10,6 +10,8 @@ import { ProtectedRoute } from '../src/components/ProtectedRoute';
 import { LoginPage } from '../src/pages/auth/LoginPage';
 import { OAuthConsentPage } from '../src/pages/oauth/OAuthConsentPage';
 import { AppShell } from '../src/app/routes';
+import { InviteAcceptPage } from '../src/pages/auth/InviteAcceptPage';
+import { AuthCallbackPage } from '../src/pages/auth/AuthCallbackPage';
 
 const authClient = vi.hoisted(() => ({
   requestOtp: vi.fn().mockResolvedValue({ accepted: true }),
@@ -134,6 +136,36 @@ describe('authenticated web shell', () => {
     expect(document.body).not.toHaveTextContent('secret-token');
   });
 
+  it('clears the local session even when the logout API fails', async () => {
+    const user = userEvent.setup();
+    sessionStorage.setItem('relo.session', JSON.stringify({ accessToken: 'secret-token' }));
+    authClient.getCurrentIdentity.mockResolvedValue(employeeIdentity);
+    authClient.logout.mockRejectedValueOnce(new Error('network down'));
+
+    renderWithAuth(<ProtectedRoute permission="employee:read"><AppShell /></ProtectedRoute>);
+    await screen.findByRole('button', { name: /sign out/i });
+    await user.click(screen.getByRole('button', { name: /sign out/i }));
+
+    expect(await screen.findByRole('link', { name: /sign in/i })).toBeInTheDocument();
+    expect(sessionStorage.getItem('relo.session')).toBeNull();
+  });
+
+  it('refreshes identity and memberships after accepting an invitation', async () => {
+    const user = userEvent.setup();
+    sessionStorage.setItem('relo.session', JSON.stringify({ accessToken: 'access-token' }));
+    authClient.getCurrentIdentity
+      .mockResolvedValueOnce(employeeIdentity)
+      .mockResolvedValueOnce({ ...employeeIdentity, memberships: [...employeeIdentity.memberships, { ...employeeIdentity.memberships[0], id: 'membership-2' }] });
+    authClient.acceptInvitation.mockResolvedValue({ membership: { id: 'membership-2' } });
+
+    renderWithAuth(<InviteAcceptPage token="invite-token" />);
+    await user.click(await screen.findByRole('button', { name: /accept invitation/i }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/membership is ready/i);
+    expect(authClient.getCurrentIdentity).toHaveBeenCalledTimes(2);
+    expect(authClient.getCurrentIdentity).toHaveBeenLastCalledWith('access-token');
+  });
+
   it('renders OAuth consent only after identity and authorization details resolve', async () => {
     sessionStorage.setItem('relo.session', JSON.stringify({ accessToken: 'access-token' }));
     authClient.getCurrentIdentity.mockReturnValue(new Promise(() => undefined));
@@ -163,6 +195,53 @@ describe('authenticated web shell', () => {
     expect(await screen.findByRole('heading', { name: /allow move app to connect/i })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /approve access/i }));
     expect(authClient.approveOAuth).toHaveBeenCalledWith('auth-1', 'access-token');
+  });
+
+  it('handles an OAuth authorization that was already completed without crashing', async () => {
+    sessionStorage.setItem('relo.session', JSON.stringify({ accessToken: 'access-token' }));
+    authClient.getOAuthDetails.mockResolvedValue({ alreadyHandled: true, redirectUrl: 'https://move.example.com/callback?code=used' });
+
+    renderWithAuth(<OAuthConsentPage authorizationId="already-used" />);
+
+    await waitFor(() => expect(window.location.pathname).toBe('/oauth/complete'));
+    expect(screen.queryByRole('button', { name: /approve access/i })).not.toBeInTheDocument();
+  });
+
+  it('completes the Google callback and restores the protected return path', async () => {
+    sessionStorage.setItem('relo.returnTo', '/checklist');
+    window.history.replaceState({}, '', '/auth/callback#access_token=oauth-access&refresh_token=oauth-refresh&expires_in=3600&token_type=bearer');
+    authClient.getCurrentIdentity.mockResolvedValue(employeeIdentity);
+
+    renderWithAuth(<AuthCallbackPage />);
+
+    await waitFor(() => expect(window.location.pathname).toBe('/checklist'));
+    expect(authClient.getCurrentIdentity).toHaveBeenCalledWith('oauth-access');
+    expect(sessionStorage.getItem('relo.returnTo')).toBeNull();
+  });
+
+  it('renders a safe callback error when Google returns an access denial', async () => {
+    window.history.replaceState({}, '', '/auth/callback#error=access_denied&error_description=User%20cancelled');
+
+    renderWithAuth(<AuthCallbackPage />);
+
+    expect(await screen.findByRole('heading', { name: /sign-in was not completed/i })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(/could not complete/i);
+  });
+
+  it('uses API permission identifiers and allows platform scope only for platform permissions', async () => {
+    sessionStorage.setItem('relo.session', JSON.stringify({ accessToken: 'access-token' }));
+    authClient.getCurrentIdentity.mockResolvedValue({
+      ...employeeIdentity,
+      platformScope: true,
+      platformRoles: ['platform_admin'],
+      memberships: [{ ...employeeIdentity.memberships[0], roles: [{ id: 'role-admin', key: 'admin' }] }],
+    });
+
+    renderWithAuth(<ProtectedRoute permission="tenant-admin:read"><div>tenant admin</div></ProtectedRoute>);
+    expect(await screen.findByText('tenant admin')).toBeInTheDocument();
+    cleanup();
+    renderWithAuth(<ProtectedRoute permission="platform:health:read"><div>platform health</div></ProtectedRoute>);
+    expect(await screen.findByText('platform health')).toBeInTheDocument();
   });
 
   it('provides keyboard-focusable mobile navigation with reduced-motion tokens', async () => {

@@ -3,15 +3,16 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../app/auth/AuthProvider';
 
 const rolePermissions: Record<string, string[]> = {
-  employee: ['employee:read', 'employee:write'],
-  hr: ['employee:read', 'hr:read', 'hr:write'],
-  reviewer: ['employee:read', 'reviewer:read', 'reviewer:write'],
-  admin: ['employee:read', 'hr:read', 'reviewer:read', 'admin:read', 'admin:write'],
-  platform_admin: ['employee:read', 'hr:read', 'reviewer:read', 'admin:read', 'admin:write'],
+  employee: ['employee:read', 'employee:write', 'profile:read', 'profile:write', 'checklist:read', 'checklist:write', 'directory:read', 'shortlist:write', 'requests:write'],
+  hr: ['hr:read', 'hr:write', 'programs:read', 'programs:write', 'invitations:read', 'invitations:write', 'reports:read'],
+  reviewer: ['reviewer:read', 'reviewer:write', 'content:read', 'content:write', 'content:publish'],
+  admin: ['tenant-admin:read', 'tenant-admin:write'],
 };
+const platformPermissions = ['platform:tenants:manage', 'platform:roles:manage', 'platform:security:manage', 'platform:audit:read', 'platform:health:read', 'platform:feature-flags:manage'];
 
 function can(identity: ReturnType<typeof useAuth>['identity'], permission: string): boolean {
   if (!identity) return false;
+  if (identity.platformScope === true && identity.platformRoles?.includes('platform_admin') && platformPermissions.includes(permission)) return true;
   return identity.memberships.some((membership) => membership.status === 'active'
     && membership.roles.some((role) => rolePermissions[role.key]?.includes(permission)));
 }

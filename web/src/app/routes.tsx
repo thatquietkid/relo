@@ -11,6 +11,7 @@ const navByRole: Record<string, Array<[string, string, string]>> = {
 };
 
 function resolvedRole(identity: ReturnType<typeof useAuth>['identity']): string {
+  if (identity?.platformScope && identity.platformRoles?.includes('platform_admin')) return 'platform_admin';
   return identity?.memberships[0]?.roles[0]?.key || 'employee';
 }
 

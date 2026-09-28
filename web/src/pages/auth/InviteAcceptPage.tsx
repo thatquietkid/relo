@@ -5,7 +5,7 @@ import * as client from '../../app/auth/auth-client';
 
 export function InviteAcceptPage({ token: suppliedToken }: { token?: string }) {
   const { token: routeToken } = useParams();
-  const { session, status } = useAuth();
+  const { session, status, refreshIdentity } = useAuth();
   const token = suppliedToken || routeToken || new URLSearchParams(window.location.search).get('token') || '';
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -15,6 +15,7 @@ export function InviteAcceptPage({ token: suppliedToken }: { token?: string }) {
     setBusy(true);
     try {
       await client.acceptInvitation(token, session.accessToken);
+      await refreshIdentity();
       setMessage('Your Relo membership is ready.');
     } catch (cause) {
       setMessage(cause instanceof Error ? cause.message : 'This invitation is invalid or expired.');

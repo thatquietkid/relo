@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { OtpVerifyPage } from './OtpVerifyPage';
 import { useAuth } from '../../app/auth/AuthProvider';
 
@@ -8,6 +8,11 @@ export function LoginPage() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const returnTo = new URLSearchParams(window.location.search).get('returnTo');
+    if (returnTo?.startsWith('/') && !returnTo.startsWith('//')) sessionStorage.setItem('relo.returnTo', returnTo);
+  }, []);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
