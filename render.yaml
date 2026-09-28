@@ -35,14 +35,20 @@ services:
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
 
-  - type: worker
+  # Render free does not provide a background-worker service. This web service
+  # keeps the worker process boundary and exposes only a health endpoint until
+  # the deployment is moved to a paid background worker plan.
+  - type: web
     name: relo-worker
     runtime: docker
     region: singapore
     plan: free
     dockerfilePath: ./worker/Dockerfile
     dockerContext: .
+    healthCheckPath: /healthz
     autoDeployTrigger: commit
     envVars:
       - key: NODE_ENV
         value: production
+      - key: WORKER_HTTP_PORT
+        value: 10000

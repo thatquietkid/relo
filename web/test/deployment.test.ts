@@ -34,15 +34,17 @@ describe('web deployment wiring', () => {
     expect(webService).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY|service_role|client_secret/i);
   });
 
-  it('declares a separate worker service built from the worker package', () => {
+  it('declares a separate free-plan worker boundary with health-only web compatibility', () => {
     const dockerfile = readFileSync(resolve(root, 'worker/Dockerfile'), 'utf8');
     const render = readFileSync(resolve(root, 'render.yaml'), 'utf8');
     expect(dockerfile).toContain('npm run build --workspace worker');
     expect(dockerfile).toContain('CMD ["node", "worker/dist/main.js"]');
     expect(dockerfile).not.toContain('"--workspace", "worker", "run", "start"');
-    expect(render).toContain('type: worker');
+    expect(render).toContain('type: web');
     expect(render).toContain('name: relo-worker');
     expect(render).toContain('dockerfilePath: ./worker/Dockerfile');
+    expect(render).toContain('WORKER_HTTP_PORT');
+    expect(render).toContain('healthCheckPath: /healthz');
     expect(render).not.toMatch(/name: relo-worker[\s\S]*?SUPABASE_SERVICE_ROLE_KEY/);
   });
 

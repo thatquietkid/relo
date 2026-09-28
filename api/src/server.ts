@@ -1,10 +1,10 @@
 import { createApp } from './app.js';
 import { createSupabaseEmployeeRepositoryFromEnv } from './employee/supabase-repository.js';
-import { getConfig } from './shared/config.js';
+import { loadConfig } from './shared/config.js';
 
+const config = loadConfig();
 const app = await createApp({}, {
   createEmployeeRepository: createSupabaseEmployeeRepositoryFromEnv,
-});
-const config = getConfig();
+}, config);
 
 await app.listen({ host: config.host, port: config.port });

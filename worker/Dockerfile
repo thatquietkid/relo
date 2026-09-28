@@ -24,4 +24,5 @@ COPY --from=build /app/worker/package.json ./worker/package.json
 COPY --from=build /app/worker/dist ./worker/dist
 
 USER node
+EXPOSE 10000
 CMD ["node", "worker/dist/main.js"]
