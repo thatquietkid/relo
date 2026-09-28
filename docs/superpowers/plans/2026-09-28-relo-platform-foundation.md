@@ -210,6 +210,7 @@ git commit -m "feat: add tenant membership and invitation schema"
 - Create: `api/src/identity/auth-service.ts`
 - Create: `api/src/identity/auth-routes.ts`
 - Create: `api/src/identity/invitation-service.ts`
+- Create: `supabase/migrations/20260928150000_invitation_acceptance.sql`
 - Create: `api/src/oauth/routes.ts`
 - Create: `api/src/oauth/consent-service.ts`
 - Create: `api/test/auth-service.test.ts`
