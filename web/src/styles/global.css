@@ -165,6 +165,15 @@ p { margin: 0; }
 .notification-row small { color: var(--relo-muted); font-size: .7rem; }
 .notification-row.is-read { opacity: .58; }
 .notification-dot { width: 8px; height: 8px; margin-top: .35rem; border-radius: 50%; background: var(--relo-sun); }
+.operations-page { max-width: 1280px; }
+.metrics-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+.metric-card { display: grid; gap: .45rem; min-height: 132px; padding: 1rem; border: 1px solid var(--relo-line); border-radius: 12px; background: rgba(255,255,255,.42); }
+.metric-card strong { color: var(--relo-navy); font-family: var(--relo-serif); font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 400; letter-spacing: -.05em; }
+.metric-card span { color: var(--relo-muted); font-size: .72rem; }
+.operations-list { display: grid; gap: .75rem; }
+.operation-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.operation-row h2 { margin: .45rem 0 .2rem; font-size: 1.35rem; }
+.operation-row p { color: var(--relo-muted); font-size: .8rem; }
 
 @media (max-width: 700px) {
   .app-shell { display: block; padding-bottom: 76px; }
@@ -185,6 +194,9 @@ p { margin: 0; }
   .oauth-actions { justify-content: stretch; }
   .oauth-actions .button { flex: 1; }
   .employee-home-grid, .settings-layout { grid-template-columns: 1fr; }
+  .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric-card:last-child { grid-column: 1 / -1; }
+  .operation-row { align-items: flex-start; flex-direction: column; }
   .next-action, .profile-settings-link { align-items: flex-start; flex-direction: column; }
   .explore-tools { grid-template-columns: 1fr; }
   .directory-grid { grid-template-columns: 1fr; }

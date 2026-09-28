@@ -1,0 +1,12 @@
+import { createSupabaseClient, type SupabaseClientConfig } from '../identity/supabase.js';
+import { ApiError } from '../shared/errors.js';
+import type { ExportJobView, GrowthEvent, ReportRepository } from './report-service.js';
+function unavailable(): ApiError { return new ApiError(503, 'REPORT_DATA_UNAVAILABLE', 'Reporting data is unavailable.'); }
+export function makeSupabaseReportRepository(client: ReturnType<typeof createSupabaseClient>): ReportRepository {
+  return {
+    async listEvents(tenantId, input) { const result = await client.from('outbox_events').select('tenant_id, event_type, aggregate_id, actor_user_id, occurred_at, payload').eq('tenant_id', tenantId).gte('occurred_at', input.from).lt('occurred_at', input.to).order('occurred_at', { ascending: true }); if (result.error) throw unavailable(); return (result.data ?? []).map((row) => ({ tenantId: String(row.tenant_id), type: String(row.event_type), aggregateId: String(row.aggregate_id ?? ''), actorUserId: String(row.actor_user_id ?? ''), occurredAt: String(row.occurred_at), payload: row.payload as Record<string, unknown> })); },
+    async createExport(input) { const result = await client.from('report_exports').insert({ tenant_id: input.tenantId, requested_by: input.actorUserId, from_at: input.from, to_at: input.to, idempotency_key: input.idempotencyKey, status: 'queued' }).select('id, status, requested_at').single(); if (result.error) throw unavailable(); return { id: String(result.data.id), status: result.data.status, requestedAt: String(result.data.requested_at) } as ExportJobView; },
+    async findExport(tenantId, actorUserId, idempotencyKey) { const result = await client.from('report_exports').select('id, status, requested_at').eq('tenant_id', tenantId).eq('requested_by', actorUserId).eq('idempotency_key', idempotencyKey).maybeSingle(); if (result.error) throw unavailable(); return result.data ? { id: String(result.data.id), status: result.data.status, requestedAt: String(result.data.requested_at) } as ExportJobView : null; },
+  };
+}
+export function createSupabaseReportRepositoryFromEnv(accessToken: string): ReportRepository { const url = process.env.SUPABASE_URL; const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY; if (!url || !publishableKey || !accessToken.trim()) throw unavailable(); const config: SupabaseClientConfig = { url, publishableKey, accessToken: accessToken.trim() }; return makeSupabaseReportRepository(createSupabaseClient(config)); }

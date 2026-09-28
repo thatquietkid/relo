@@ -1,0 +1,10 @@
+import { useEffect, useState } from 'react';
+import * as client from '../../app/auth/auth-client';
+import { useAuth } from '../../app/auth/AuthProvider';
+
+const metricKeys = ['acquisition', 'activation', 'retention', 'referral', 'revenue'] as const;
+export function HrDashboardPage() {
+  const { session } = useAuth(); const [report, setReport] = useState<client.AaarrrReport | null>(null); const [error, setError] = useState('');
+  useEffect(() => { if (!session) return; const to = new Date(); const from = new Date(to); from.setDate(to.getDate() - 30); void client.getAaarrrReport(session.accessToken, from.toISOString(), to.toISOString()).then((result) => setReport(result.report)).catch(() => setError('Reports are temporarily unavailable.')); }, [session]);
+  return <div className="page-content operations-page"><div className="page-heading"><div><p className="eyebrow">HR workspace</p><h1>HR workspace</h1></div><p>Keep employee movement visible, with truthful signals for the work that needs attention.</p></div><section className="metrics-grid" aria-label="AARRR metrics">{metricKeys.map((key) => { const metric = report?.[key]; return <article className="metric-card" key={key}><p className="eyebrow">{metric?.label ?? key}</p><strong>{metric?.status === 'no_data' ? 'No data' : `${Math.round((metric?.rate ?? 0) * 100)}%`}</strong><span>{metric?.status === 'no_data' ? 'No data in this window' : `${metric?.numerator} of ${metric?.denominator}`}</span></article>; })}</section>{error && <p className="status-line" role="status">{error}</p>}<section className="content-grid"><article className="panel"><p className="eyebrow">Activation</p><h2>Keep the next step close.</h2><p>Invite employees, set up programmes, and review service requests from one protected workspace.</p></article><article className="panel panel-mint"><p className="eyebrow">Growth lens</p><h2>No vanity numbers.</h2><p>Every metric shows its numerator, denominator, source events, and honest no-data state.</p></article></section></div>;
+}

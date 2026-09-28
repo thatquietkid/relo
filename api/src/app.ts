@@ -13,10 +13,13 @@ import { registerDirectoryRoutes, type DirectoryRouteDependencies } from './dire
 import { registerProviderRequestRoutes, type ProviderRequestRouteDependencies } from './requests/routes.js';
 import { registerNotificationRoutes, type NotificationRouteDependencies } from './notifications/routes.js';
 import { registerHrRoutes, type HrRouteDependencies } from './hr/routes.js';
+import { registerReviewRoutes, type ReviewRouteDependencies } from './review/routes.js';
+import { registerReportingRoutes, type ReportingRouteDependencies } from './reporting/routes.js';
+import { registerAdminRoutes, type AdminRouteDependencies } from './admin/routes.js';
 import { loadConfig, type ApiConfig } from './shared/config.js';
 import './authorization/policy.js';
 
-export interface AppDependencies extends AuthRouteDependencies, OAuthRouteDependencies, EmployeeRouteDependencies, DirectoryRouteDependencies, ProviderRequestRouteDependencies, NotificationRouteDependencies, HrRouteDependencies {}
+export interface AppDependencies extends AuthRouteDependencies, OAuthRouteDependencies, EmployeeRouteDependencies, DirectoryRouteDependencies, ProviderRequestRouteDependencies, NotificationRouteDependencies, HrRouteDependencies, ReviewRouteDependencies, ReportingRouteDependencies, AdminRouteDependencies {}
 
 export function createApp(
   options: FastifyServerOptions = {},
@@ -63,6 +66,9 @@ export function createApp(
   registerProviderRequestRoutes(app, resolvedDependencies);
   registerNotificationRoutes(app, resolvedDependencies);
   registerHrRoutes(app, resolvedDependencies);
+  registerReviewRoutes(app, resolvedDependencies);
+  registerReportingRoutes(app, resolvedDependencies);
+  registerAdminRoutes(app, resolvedDependencies);
 
   app.setNotFoundHandler((request, reply) => {
     const error = new ApiError(404, 'NOT_FOUND', 'The requested resource was not found.');

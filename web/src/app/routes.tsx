@@ -4,9 +4,9 @@ import { useAuth } from './auth/AuthProvider';
 
 const navByRole: Record<string, Array<[string, string, string]>> = {
   employee: [['/', '⌂', 'Home'], ['/checklist', '✓', 'Checklist'], ['/explore', '⌖', 'Explore'], ['/requests', '↗', 'Requests'], ['/profile', '◌', 'Profile']],
-  hr: [['/hr', '▦', 'Overview'], ['/hr/employees', '♙', 'Employees'], ['/hr/programs', '✓', 'Programs'], ['/hr/requests', '↗', 'Requests'], ['/hr/settings', '⚙', 'Settings']],
+  hr: [['/hr', '▦', 'Overview'], ['/hr/employees', '♙', 'Employees'], ['/hr/programs', '✓', 'Programs'], ['/hr/requests', '↗', 'Requests'], ['/hr/reports', '◌', 'Reports'], ['/hr/settings', '⚙', 'Settings']],
   reviewer: [['/review', '✦', 'Review'], ['/review/directory', '⌖', 'Directory'], ['/review/audit', '▤', 'Audit'], ['/review/settings', '⚙', 'Settings']],
-  admin: [['/admin', '◈', 'Events'], ['/admin/users', '♙', 'Users']],
+  admin: [['/admin', '◈', 'Events'], ['/admin/users', '♙', 'Users'], ['/admin/security', '♡', 'Security']],
   platform_admin: [['/admin/tenants', '⌂', 'Tenants'], ['/admin/health', '♡', 'Health'], ['/admin/settings', '⚙', 'Settings']],
 };
 

@@ -117,8 +117,8 @@ select ok(to_regclass('public.notifications_dedupe_key_unique') is not null, 'no
 select policies_are('public', 'relocation_cases', array['employees can view own relocation cases', 'employees can view their own relocation case']);
 select policies_are('public', 'checklist_items', array['employees can view own checklist items']);
 select policies_are('public', 'cities', array['employees can view relevant cities']);
-select policies_are('public', 'providers', array['employees can view relevant providers', 'tenant operators can view request providers']);
-select policies_are('public', 'directory_entries', array['employees can view published directory entries', 'employees can view directory entries tied to own requests', 'tenant operators can view request directory entries']);
+select policies_are('public', 'providers', array['employees can view relevant providers', 'reviewers can create scoped providers', 'reviewers can update scoped providers', 'reviewers can view scoped providers', 'tenant operators can view request providers']);
+select policies_are('public', 'directory_entries', array['employees can view published directory entries', 'employees can view directory entries tied to own requests', 'reviewers can create scoped directory entries', 'reviewers can update scoped directory entries', 'reviewers can view scoped directory entries', 'tenant operators can view request directory entries']);
 select policies_are('public', 'shortlist_items', array['employees can view own shortlist', 'employees can create own shortlist', 'employees can delete own shortlist']);
 select policies_are('public', 'provider_requests', array['employees can view own provider requests', 'tenant operators can update provider requests', 'tenant operators can view provider requests']);
 select policies_are('public', 'consent_records', array['employees can view own consent records']);
@@ -141,7 +141,7 @@ select ok(
   not exists (
     select 1
       from (values
-        ('relocation_cases'), ('checklist_items'), ('cities'), ('providers'), ('directory_entries'),
+        ('relocation_cases'), ('checklist_items'), ('cities'),
         ('notifications'), ('user_preferences')
       ) as exposed(table_name)
      where has_table_privilege('authenticated', 'public.' || exposed.table_name, 'INSERT')
