@@ -1,5 +1,11 @@
 # Relo Platform Design Spec
 
+## Priority architecture update — 28 September 2026
+
+The first product slice prioritizes the AARRR loop: Acquisition, Activation, Retention, Referral, and Revenue. The frontend and backend are separate deployable microservices. The backend is the authority for Supabase Auth sessions, SMTP-triggered verification/reset/invitation email, database-backed RBAC, and tenant-scoped read models. The frontend only renders capabilities granted by a valid backend session; dashboards are unavailable while logged out.
+
+The prototype now uses the Supabase project selected by the team for Postgres, Auth, RLS, profiles, relocation cases, growth events, and `growth_metrics`. AARRR metrics are seeded fixtures in the database so the team can validate the workflow before event ingestion and materialized projections are added. In production, domain events should be emitted from invitation, first-action, checklist, feedback, referral, and allowance flows and projected into tenant-scoped metrics.
+
 ## Mission
 
 Build a secure B2B relocation onboarding platform that gives transferred employees one employer-endorsed place to prepare for a move, discover trusted local options, track next steps, and request help while giving HR a repeatable, low-touch operating surface.

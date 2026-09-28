@@ -1,13 +1,15 @@
 # Relo prototype
 
-This is a frontend-only prototype of the approved Relo relocation onboarding experience.
+This is the frontend microservice prototype for the approved Relo relocation onboarding experience. The separate `backend/` service owns Supabase Auth sessions, RBAC, SMTP-triggered email flows, and AARRR metrics.
 
 ## Run locally
 
 From the repository root:
 
 ```powershell
-python -m http.server 4173 --directory prototype
+$env:RELO_API_URL = "http://127.0.0.1:4100"
+node prototype/server.js
+node backend/server.js
 ```
 
 Open <http://127.0.0.1:4173>.
@@ -29,7 +31,7 @@ The Node server binds to `0.0.0.0`, honors Render's `PORT`, serves `/healthz`, a
 
 ## What is interactive
 
-- Switch between Employee and HR view.
+- Sign in through the backend. Dashboards are not rendered without a valid session.
 - Employee navigation: home, checklist, explore, saved, requests, and profile.
 - Complete checklist items to update progress.
 - Filter/search directory items, open details, save items, and submit a consent-based request.
@@ -38,4 +40,4 @@ The Node server binds to `0.0.0.0`, honors Render's `PORT`, serves `/healthz`, a
 
 ## Prototype boundary
 
-All state is in memory and resets on refresh. There is no real authentication, persistence, API, provider handoff, email delivery, or tenant isolation. Those are represented visually and should be replaced with the service contracts in `docs/relo/event-contracts.md` during production implementation.
+The UI state is still intentionally lightweight, but authentication and AARRR data now cross a real backend boundary. Supabase stores users, profiles, role, tenant membership, relocation cases, events, and metrics with RLS. Before production, replace fixture UI data with API-backed read models, add audited admin provisioning, and configure a real SMTP provider in Supabase Auth.

@@ -11,3 +11,24 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: RELO_API_URL
+        value: https://relo-backend.onrender.com
+
+  - type: web
+    name: relo-backend
+    runtime: docker
+    region: singapore
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FRONTEND_ORIGIN
+        value: https://relo-prototype.onrender.com
+      - key: SUPABASE_URL
+        value: https://rxmkcjjiyrteooztynsr.supabase.co
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false

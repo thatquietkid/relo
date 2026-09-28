@@ -1,0 +1,11 @@
+{
+  "name": "relo-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.57.0"
+  }
+}

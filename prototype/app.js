@@ -8,6 +8,8 @@ const listings = [
 ];
 
 const state = {
+  auth: { loggedIn: false, user: null, token: null, error: '' },
+  growth: null,
   role: 'employee',
   view: 'home',
   filter: 'All',
@@ -28,6 +30,7 @@ const state = {
 };
 
 const app = document.querySelector('#app');
+const API_BASE_URL = window.RELO_CONFIG?.apiBaseUrl || 'http://127.0.0.1:4100';
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
@@ -50,26 +53,64 @@ function navItems() {
       ];
 }
 
+function initials(user) {
+  return (user?.name || 'Relo').split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+}
+
+function renderLogin() {
+  app.innerHTML = `
+    <main class="login-shell">
+      <section class="login-card">
+        <div class="brand login-brand"><span class="brand-mark">r</span><span class="brand-name">relo</span></div>
+        <div class="eyebrow">Employer-backed relocation</div>
+        <h1>A calmer start to a new city.</h1>
+        <p class="login-copy">Relo keeps the next useful step, trusted local support, and your privacy in one place.</p>
+        <form id="login-form" class="login-form">
+          <div class="field"><label for="login-email">Work email</label><input id="login-email" type="email" autocomplete="email" required placeholder="you@company.com" /></div>
+          <div class="field"><label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password" required placeholder="Your password" /></div>
+          ${state.auth.error ? `<div class="login-error" role="alert">${escapeHtml(state.auth.error)}</div>` : ''}
+          <button class="button button-dark login-submit" type="submit">Sign in</button>
+        </form>
+        <div class="login-divider"><span>Configured access</span></div>
+        <div class="login-demo-grid">
+          <button class="login-demo" data-demo-login="employee"><strong>Employee account</strong><span>Fill configured account</span></button>
+          <button class="login-demo" data-demo-login="hr"><strong>HR account</strong><span>Fill configured account</span></button>
+        </div>
+        <p class="login-footnote">Email verification, password reset, and invitations are delivered through the backend SMTP boundary.</p>
+      </section>
+      <aside class="login-rail">
+        <div class="eyebrow">The growth loop</div>
+        <h2>Measure the moments that make relocation work.</h2>
+        <p>Relo treats the employee experience as a connected loop, not a one-time form.</p>
+        <div class="login-principles">
+          <div><span>01</span><strong>Acquisition</strong><p>Invite the right people with less friction.</p></div>
+          <div><span>02</span><strong>Activation</strong><p>Help every employee take a first useful action.</p></div>
+          <div><span>03</span><strong>Retention</strong><p>Keep progress visible between milestones.</p></div>
+          <div><span>04</span><strong>Referral</strong><p>Turn helpful local knowledge into trust.</p></div>
+          <div><span>05</span><strong>Revenue</strong><p>Make programme value legible to the business.</p></div>
+        </div>
+      </aside>
+    </main>`;
+}
+
 function renderShell() {
   const currentLabel = navItems().find(([id]) => id === state.view)?.[2] || (state.role === 'employee' ? 'Home' : 'Overview');
+  const user = state.auth.user;
   app.innerHTML = `
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark">r</span><span class="brand-name">relo</span></div>
-      <div class="role-switcher" aria-label="Switch prototype role">
-        <button class="${state.role === 'employee' ? 'active' : ''}" data-role="employee" onclick="window.handleRole('employee')">Employee</button>
-        <button class="${state.role === 'hr' ? 'active' : ''}" data-role="hr" onclick="window.handleRole('hr')">HR view</button>
-      </div>
+      <div class="role-badge">${state.role === 'employee' ? 'Employee workspace' : state.role === 'admin' ? 'Admin workspace' : 'HR workspace'}</div>
       <div class="nav-label">Workspace</div>
       <nav class="nav-list" aria-label="Primary navigation">
         ${navItems().map(([id, icon, label]) => `<button class="nav-item ${state.view === id ? 'active' : ''}" data-nav="${id}" onclick="window.handleNav('${id}')"><span class="nav-icon">${icon}</span>${label}</button>`).join('')}
       </nav>
       <div class="sidebar-bottom">
         <div class="trust-note"><strong>Why Relo?</strong>One place for the next right step, with people and places your company can stand behind.</div>
-        <div class="profile-chip"><span class="avatar">${state.role === 'employee' ? 'RV' : 'AK'}</span><div><strong>${state.role === 'employee' ? 'Rohan Verma' : 'Ananya Krishnan'}</strong><small>${state.role === 'employee' ? 'Senior Analyst' : 'Talent Mobility'}</small></div></div>
+        <div class="profile-chip"><span class="avatar">${initials(user)}</span><div><strong>${escapeHtml(user?.name || 'Relo user')}</strong><small>${escapeHtml(user?.email || '')}</small></div></div>
       </div>
     </aside>
     <main class="main">
-      <header class="topbar"><div><div class="eyebrow">${state.role === 'employee' ? 'Your relocation' : 'Mobility workspace'}</div><div class="topbar-title">${currentLabel}</div></div><div class="topbar-actions"><button class="icon-button" aria-label="Open notifications">♢</button><button class="icon-button" aria-label="Open help">?</button><span class="avatar">${state.role === 'employee' ? 'RV' : 'AK'}</span></div></header>
+      <header class="topbar"><div><div class="eyebrow">${state.role === 'employee' ? 'Your relocation' : 'Mobility workspace'}</div><div class="topbar-title">${currentLabel}</div></div><div class="topbar-actions"><button class="icon-button" aria-label="Open notifications">♢</button><button class="icon-button" aria-label="Open help">?</button><span class="avatar">${initials(user)}</span><button class="button button-quiet button-small" data-logout onclick="window.logoutRelo()">Sign out</button></div></header>
       <section class="content">${state.role === 'employee' ? renderEmployee() : renderHr()} </section>
     </main>
     ${renderModal()}
@@ -148,7 +189,20 @@ function renderHr() {
 }
 
 function renderHrDashboard() {
-  return `<div class="page-heading"><div><div class="eyebrow">Mobility programme · Q4</div><h1>A clearer view of every move.</h1></div><div><p>See where people are progressing, where support is needed, and what your team can stop answering by email.</p><button class="button button-primary" data-open-invite>Invite an employee</button></div></div><div class="stat-row"><div class="stat"><strong>42</strong><span>Active relocations</span><span class="trend">↑ 8% this month</span></div><div class="stat"><strong>8</strong><span>Invitations pending</span><span class="trend">3 need a nudge</span></div><div class="stat"><strong>71%</strong><span>Average progress</span><span class="trend">↑ 4 pts this month</span></div></div><div class="dashboard-grid" style="margin-top:22px"><section class="panel panel-pad"><div class="panel-heading"><div><h2>Recent employees</h2><p>Operational view · private notes stay private</p></div><button class="text-link" data-nav="employees">View all employees</button></div>${employeeTable()}</section><aside class="stack"><section class="panel panel-pad"><div class="panel-heading"><div><h3>Needs attention</h3><p>Small interventions, earlier.</p></div></div><div class="attention-list"><div class="attention"><span class="attention-mark"></span><div><strong>3 invitations are still unopened</strong><p>Send a gentle reminder before their start date.</p></div></div><div class="attention"><span class="attention-mark"></span><div><strong>5 requests await acknowledgement</strong><p>Example Movers and four others need a response.</p></div></div></div></section><section class="panel panel-pad"><div class="panel-heading"><div><h3>Programme pulse</h3><p>Relo starter programme</p></div></div><div class="progress-track"><div class="progress-fill" style="width:71%; background:var(--mint-deep)"></div></div><div class="progress-footer" style="color:var(--ink-soft)"><span>71% complete</span><span>42 cases</span></div></section></aside></div>`;
+  return `<div class="page-heading"><div><div class="eyebrow">Mobility programme · Q4</div><h1>A clearer view of every move.</h1></div><div><p>See where people are progressing, where support is needed, and what your team can stop answering by email.</p><button class="button button-primary" data-open-invite>Invite an employee</button></div></div><div class="stat-row"><div class="stat"><strong>42</strong><span>Active relocations</span><span class="trend">↑ 8% this month</span></div><div class="stat"><strong>8</strong><span>Invitations pending</span><span class="trend">3 need a nudge</span></div><div class="stat"><strong>71%</strong><span>Average progress</span><span class="trend">↑ 4 pts this month</span></div></div>${renderAarrr()}<div class="dashboard-grid" style="margin-top:22px"><section class="panel panel-pad"><div class="panel-heading"><div><h2>Recent employees</h2><p>Operational view · private notes stay private</p></div><button class="text-link" data-nav="employees">View all employees</button></div>${employeeTable()}</section><aside class="stack"><section class="panel panel-pad"><div class="panel-heading"><div><h3>Needs attention</h3><p>Small interventions, earlier.</p></div></div><div class="attention-list"><div class="attention"><span class="attention-mark"></span><div><strong>3 invitations are still unopened</strong><p>Send a gentle reminder before their start date.</p></div></div><div class="attention"><span class="attention-mark"></span><div><strong>5 requests await acknowledgement</strong><p>Example Movers and four others need a response.</p></div></div></div></section><section class="panel panel-pad"><div class="panel-heading"><div><h3>Programme pulse</h3><p>Relo starter programme</p></div></div><div class="progress-track"><div class="progress-fill" style="width:71%; background:var(--mint-deep)"></div></div><div class="progress-footer" style="color:var(--ink-soft)"><span>71% complete</span><span>42 cases</span></div></section></aside></div>`;
+}
+
+const defaultAarrr = {
+  acquisition: { label: 'Acquisition', value: '80%', detail: 'Invite acceptance', trend: '+9 pts' },
+  activation: { label: 'Activation', value: '12d', detail: 'Time to first action', trend: '-2 days' },
+  retention: { label: 'Retention', value: '71%', detail: 'Active case progress', trend: '+4 pts' },
+  referral: { label: 'Referral', value: '27', detail: 'Helpful feedback responses', trend: '+6 this month' },
+  revenue: { label: 'Revenue', value: '₹75k', detail: 'Average allowance managed', trend: '42 cases' }
+};
+
+function renderAarrr() {
+  const metrics = state.growth || defaultAarrr;
+  return `<section class="panel panel-pad growth-panel"><div class="panel-heading"><div><div class="eyebrow">High-priority business loop</div><h2>AARRR growth signals</h2><p>Aggregate programme health, kept separate from private employee notes.</p></div><span class="badge active">Live read model</span></div><div class="aarrr-grid">${Object.values(metrics).map((metric) => `<article class="aarrr-card"><span class="aarrr-label">${escapeHtml(metric.label)}</span><strong>${escapeHtml(metric.value)}</strong><span>${escapeHtml(metric.detail)}</span><em>${escapeHtml(metric.trend)}</em></article>`).join('')}</div></section>`;
 }
 
 function employeeTable() {
@@ -190,14 +244,87 @@ function showToast(message) {
   showToast.timeout = window.setTimeout(() => { state.toast = ''; render(); }, 2600);
 }
 
-function render() { renderShell(); }
+function persistSession() {
+  if (state.auth.loggedIn) {
+    sessionStorage.setItem('reloSession', JSON.stringify({ user: state.auth.user, token: state.auth.token }));
+  } else {
+    sessionStorage.removeItem('reloSession');
+  }
+}
+
+function setSession(user, token) {
+  state.auth = { loggedIn: true, user, token, error: '' };
+  state.role = user.role === 'employee' ? 'employee' : 'hr';
+  state.view = state.role === 'employee' ? 'home' : 'dashboard';
+  state.growth = null;
+  persistSession();
+  render();
+  if (state.role === 'hr') loadGrowth();
+}
+
+async function loginWithCredentials(email, password) {
+  state.auth.error = '';
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Unable to sign in');
+    setSession(data.user, data.token);
+  } catch (error) {
+    state.auth.error = error.message === 'Failed to fetch' ? 'The auth service is unavailable. Use prototype access or start the backend service.' : error.message;
+    render();
+  }
+}
+
+function demoLogin(role) {
+  const email = role === 'hr' ? 'ananya@demo.relo' : 'rohan@demo.relo';
+  const emailInput = document.querySelector('#login-email');
+  const passwordInput = document.querySelector('#login-password');
+  if (emailInput && passwordInput) {
+    emailInput.value = email;
+    passwordInput.value = '';
+    passwordInput.focus();
+    state.auth.error = `Enter the ${role} account password, then sign in.`;
+    render();
+  }
+}
+
+async function loadGrowth() {
+  if (!state.auth.token || state.role !== 'hr') return;
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/growth/aarrr`, { headers: { Authorization: `Bearer ${state.auth.token}` } });
+    if (!response.ok) return;
+    const data = await response.json();
+    state.growth = data.metrics;
+    render();
+  } catch {
+    // The fixture keeps the HR dashboard useful while the API is offline.
+  }
+}
+
+function logout() {
+  if (state.auth.token) {
+    fetch(`${API_BASE_URL}/api/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${state.auth.token}` } }).catch(() => {});
+  }
+  state.auth = { loggedIn: false, user: null, token: null, error: '' };
+  state.role = 'employee';
+  state.view = 'home';
+  state.growth = null;
+  persistSession();
+  render();
+}
+
+function render() { state.auth.loggedIn ? renderShell() : renderLogin(); }
 
 window.handleNav = (view) => navigate(view);
-window.handleRole = (role) => { state.role = role; state.view = role === 'employee' ? 'home' : 'dashboard'; render(); };
+window.demoLogin = demoLogin;
+window.logoutRelo = logout;
 
 app.addEventListener('click', (event) => {
+  const demoRole = event.target.closest('[data-demo-login]')?.dataset.demoLogin;
+  if (demoRole) { demoLogin(demoRole); return; }
+  if (event.target.closest('[data-logout]')) { logout(); return; }
   const role = event.target.closest('[data-role]')?.dataset.role;
-  if (role) { state.role = role; state.view = role === 'employee' ? 'home' : 'dashboard'; render(); return; }
+  if (role && state.auth.loggedIn) { state.role = role; state.view = role === 'employee' ? 'home' : 'dashboard'; render(); return; }
   const nav = event.target.closest('[data-nav]')?.dataset.nav;
   if (nav) { event.preventDefault(); navigate(nav); return; }
   const filter = event.target.closest('[data-filter]')?.dataset.filter;
@@ -222,6 +349,11 @@ app.addEventListener('input', (event) => {
 });
 
 app.addEventListener('submit', (event) => {
+  if (event.target.id === 'login-form') {
+    event.preventDefault();
+    loginWithCredentials(document.querySelector('#login-email').value, document.querySelector('#login-password').value);
+    return;
+  }
   if (event.target.id === 'request-form') {
     event.preventDefault();
     const item = listings.find((listing) => listing.id === state.modal.listingId);
@@ -236,5 +368,12 @@ app.addEventListener('submit', (event) => {
     showToast('Invitation queued for the employee.');
   }
 });
+
+try {
+  const stored = JSON.parse(sessionStorage.getItem('reloSession') || 'null');
+  if (stored?.user && stored?.token) setSession(stored.user, stored.token);
+} catch {
+  sessionStorage.removeItem('reloSession');
+}
 
 render();
