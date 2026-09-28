@@ -10,9 +10,11 @@ import {
   makeChecklistService,
   type EmployeeRepository,
 } from './checklist-service.js';
+import { createSupabaseEmployeeRepositoryFromEnv } from './supabase-repository.js';
 
 export interface EmployeeRouteDependencies extends AuthorizationDependencies {
   employeeRepository?: EmployeeRepository;
+  createEmployeeRepository?: (accessToken: string) => EmployeeRepository;
 }
 
 function identityForRequest(request: FastifyRequest): IdentityContext {
@@ -31,9 +33,21 @@ function itemId(request: FastifyRequest): string {
   return value;
 }
 
-function repositoryOrUnavailable(deps: EmployeeRouteDependencies): EmployeeRepository {
+function bearerToken(request: FastifyRequest): string {
+  const value = request.headers.authorization;
+  return typeof value === 'string' && value.startsWith('Bearer ') ? value.slice(7).trim() : '';
+}
+
+function repositoryForRequest(deps: EmployeeRouteDependencies, request: FastifyRequest): EmployeeRepository {
   if (deps.employeeRepository) return deps.employeeRepository;
-  throw new ApiError(503, 'EMPLOYEE_DATA_UNAVAILABLE', 'Employee relocation data is unavailable.');
+  const token = bearerToken(request);
+  const factory = deps.createEmployeeRepository ?? createSupabaseEmployeeRepositoryFromEnv;
+  try {
+    return factory(token);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(503, 'EMPLOYEE_DATA_UNAVAILABLE', 'Employee relocation data is unavailable.');
+  }
 }
 
 export function registerEmployeeRoutes(app: FastifyInstance, deps: EmployeeRouteDependencies = {}): void {
@@ -43,34 +57,35 @@ export function registerEmployeeRoutes(app: FastifyInstance, deps: EmployeeRoute
   });
 
   app.get('/api/v1/me/relocation', { preHandler: hooks.requireAuth }, async (request) => {
-    const repository = repositoryOrUnavailable(deps);
+    const repository = repositoryForRequest(deps, request);
     const service = makeCaseService({ repository });
-    return { relocation: await service.getMyRelocationCase(identityForRequest(request)) };
+    return { relocation: await service.getMyRelocationCase(identityForRequest(request), request.id) };
   });
 
   app.get('/api/v1/me/relocation/checklist', { preHandler: hooks.requireAuth }, async (request) => {
-    const repository = repositoryOrUnavailable(deps);
+    const repository = repositoryForRequest(deps, request);
     const identity = identityForRequest(request);
     const caseService = makeCaseService({ repository });
     const checklistService = makeChecklistService({ repository });
-    const relocation = await caseService.getMyRelocationCase(identity);
+    const relocation = await caseService.getMyRelocationCase(identity, request.id);
     return { checklist: await checklistService.listChecklist(identity, relocation.id) };
   });
 
   app.patch('/api/v1/me/relocation/checklist/:itemId', { preHandler: hooks.requireAuth }, async (request) => {
-    const repository = repositoryOrUnavailable(deps);
+    const repository = repositoryForRequest(deps, request);
     const input = parseJsonBody(z.object({ state: z.enum(CHECKLIST_STATES) }), request.body);
     const idempotencyKey = parseIdempotencyKey(request.headers['idempotency-key']);
     const identity = identityForRequest(request);
     const caseService = makeCaseService({ repository });
     const checklistService = makeChecklistService({ repository });
-    const relocation = await caseService.getMyRelocationCase(identity);
+    const relocation = await caseService.getMyRelocationCase(identity, request.id);
     const item = await checklistService.setChecklistState(
       identity,
       relocation.id,
       itemId(request),
       input.state,
       idempotencyKey,
+      request.id,
     );
     return { checklist_item: item };
   });
