@@ -272,6 +272,25 @@ describe('authenticated web shell', () => {
     expect(within(navigation).getByRole('link', { name: /users/i })).toHaveAttribute('href', '/admin/users');
     expect(within(navigation).queryByRole('link', { name: /health/i })).not.toBeInTheDocument();
     expect(within(navigation).queryByRole('link', { name: /tenants/i })).not.toBeInTheDocument();
+
+    cleanup();
+    authClient.getCurrentIdentity.mockResolvedValue({
+      ...employeeIdentity,
+      memberships: [],
+      platformAuthorization: {
+        scope: 'platform',
+        roles: ['platform_admin'],
+        permissions: ['platform:tenants:manage', 'platform:health:read', 'platform:feature-flags:manage'],
+      },
+    });
+    renderWithAuth(<AppShell />);
+
+    const platformNavigation = await screen.findByRole('navigation', { name: /primary navigation/i });
+    expect(within(platformNavigation).getByRole('link', { name: /tenants/i })).toHaveAttribute('href', '/admin/tenants');
+    expect(within(platformNavigation).getByRole('link', { name: /health/i })).toHaveAttribute('href', '/admin/health');
+    expect(within(platformNavigation).getByRole('link', { name: /settings/i })).toHaveAttribute('href', '/admin/settings');
+    expect(within(platformNavigation).queryByRole('link', { name: /events/i })).not.toBeInTheDocument();
+    expect(within(platformNavigation).queryByRole('link', { name: /users/i })).not.toBeInTheDocument();
   });
 
   it('maps tenant-admin and platform route metadata to distinct API permissions', () => {
