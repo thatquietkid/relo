@@ -1,4 +1,6 @@
-create extension if not exists pgcrypto;
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
+set search_path = public, extensions, pg_catalog;
 
 create table if not exists public.tenants (
   id uuid primary key default gen_random_uuid(),
@@ -129,9 +131,9 @@ returns text
 language sql
 immutable
 strict
-set search_path = public, pg_catalog
+set search_path = public, extensions, pg_catalog
 as $$
-  select encode(public.digest(raw_token, 'sha256'), 'hex');
+  select encode(digest(raw_token, 'sha256'), 'hex');
 $$;
 
 create or replace function public.current_tenant_ids()
@@ -147,7 +149,7 @@ as $$
      and m.status = 'active';
 $$;
 
-create or replace function public.has_role(requested_role text)
+create or replace function public.has_role(p_tenant_id uuid, p_role text)
 returns boolean
 language sql
 stable
@@ -159,18 +161,19 @@ as $$
       from public.memberships as m
       join public.membership_roles as mr on mr.membership_id = m.id
       join public.roles as r on r.id = mr.role_id
-     where m.user_id = auth.uid()
+     where m.tenant_id = p_tenant_id
+       and m.user_id = auth.uid()
        and m.status = 'active'
-       and r.key = requested_role
+       and r.key = p_role
   );
 $$;
 
 revoke all on function public.set_updated_at() from public, anon, authenticated;
 revoke all on function public.hash_invitation_token(text) from public, anon, authenticated;
 revoke all on function public.current_tenant_ids() from public, anon;
-revoke all on function public.has_role(text) from public, anon;
+revoke all on function public.has_role(uuid, text) from public, anon;
 grant execute on function public.current_tenant_ids() to authenticated, service_role;
-grant execute on function public.has_role(text) to authenticated, service_role;
+grant execute on function public.has_role(uuid, text) to authenticated, service_role;
 grant execute on function public.hash_invitation_token(text) to service_role;
 
 alter table public.tenants enable row level security;
@@ -196,10 +199,6 @@ create policy "members can view same tenant memberships"
     and status = 'active'
     and tenant_id = any (public.current_tenant_ids())
   );
-
-create policy "authenticated users can view roles"
-  on public.roles for select to authenticated
-  using (true);
 
 create policy "members can view assigned roles"
   on public.membership_roles for select to authenticated

@@ -168,16 +168,16 @@ git commit -m "feat: add typed API validation and errors"
 - `invitations(id, tenant_id, email, role_key, token_hash, status, expires_at, accepted_at, invited_by)` tracks controlled onboarding.
 - `audit_logs(id, tenant_id, actor_user_id, action, resource_type, resource_id, metadata, created_at)` records security-sensitive changes.
 - `idempotency_keys(tenant_id, actor_user_id, key, request_hash, response_status, response_body, created_at, expires_at)` stores replay results.
-- Helper SQL functions `current_tenant_ids()` and `has_role(text)` are `security definer` functions with a fixed `search_path`.
+- Helper SQL functions `current_tenant_ids()` and tenant-scoped `has_role(uuid, text)` are `security definer` functions with a fixed `search_path`.
 
 - [ ] **Step 1: Write the failing SQL assertions**
 
 ```sql
-select has_table('public.tenants');
-select has_table('public.memberships');
-select has_table('public.invitations');
-select has_rls('public.memberships');
-select policy_exists('public.memberships', 'members can view same tenant memberships');
+select has_table('public', 'tenants');
+select has_table('public', 'memberships');
+select has_table('public', 'invitations');
+select ok((select relrowsecurity from pg_class where oid = 'public.memberships'::regclass), 'memberships has RLS enabled');
+select policies_are('public', 'memberships', array['members can view same tenant memberships']);
 ```
 
 - [ ] **Step 2: Run the SQL test before migration**

@@ -37,12 +37,24 @@ export interface MembershipView extends MembershipRow {
   roles: RoleRow[];
 }
 
-export interface InvitationRow {
+export interface InvitationStorageRow {
   id: string;
   tenant_id: string;
   email: string;
   role_key: RoleKey;
   token_hash: string;
+  status: InvitationStatus;
+  expires_at: string;
+  accepted_at: string | null;
+  invited_by: string | null;
+  created_at: string;
+}
+
+export interface InvitationView {
+  id: string;
+  tenant_id: string;
+  email: string;
+  role_key: RoleKey;
   status: InvitationStatus;
   expires_at: string;
   accepted_at: string | null;
