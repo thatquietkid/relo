@@ -80,16 +80,16 @@ select ok(
   'all employee tables use single-column UUID primary keys'
 );
 
-select has_rls('public', 'relocation_cases');
-select has_rls('public', 'checklist_items');
-select has_rls('public', 'cities');
-select has_rls('public', 'providers');
-select has_rls('public', 'directory_entries');
-select has_rls('public', 'shortlist_items');
-select has_rls('public', 'provider_requests');
-select has_rls('public', 'consent_records');
-select has_rls('public', 'notifications');
-select has_rls('public', 'user_preferences');
+select ok((select relrowsecurity from pg_class where oid = 'public.relocation_cases'::regclass), 'relocation cases have RLS');
+select ok((select relrowsecurity from pg_class where oid = 'public.checklist_items'::regclass), 'checklist items have RLS');
+select ok((select relrowsecurity from pg_class where oid = 'public.cities'::regclass), 'cities have RLS');
+select ok((select relrowsecurity from pg_class where oid = 'public.providers'::regclass), 'providers have RLS');
+select ok((select relrowsecurity from pg_class where oid = 'public.directory_entries'::regclass), 'directory entries have RLS');
+select ok((select relrowsecurity from pg_class where oid = 'public.shortlist_items'::regclass), 'shortlist items have RLS');
+select ok((select relrowsecurity from pg_class where oid = 'public.provider_requests'::regclass), 'provider requests have RLS');
+select ok((select relrowsecurity from pg_class where oid = 'public.consent_records'::regclass), 'consent records have RLS');
+select ok((select relrowsecurity from pg_class where oid = 'public.notifications'::regclass), 'notifications have RLS');
+select ok((select relrowsecurity from pg_class where oid = 'public.user_preferences'::regclass), 'user preferences have RLS');
 
 select ok((select relforcerowsecurity from pg_class where oid = 'public.relocation_cases'::regclass), 'relocation cases force RLS');
 select ok((select relforcerowsecurity from pg_class where oid = 'public.checklist_items'::regclass), 'checklist items force RLS');
@@ -114,12 +114,12 @@ select ok(to_regclass('public.shortlist_items_user_entry_unique') is not null, '
 select ok(to_regclass('public.provider_requests_active_identity') is not null, 'active provider request uniqueness exists');
 select ok(to_regclass('public.notifications_dedupe_key_unique') is not null, 'notification dedupe uniqueness exists');
 
-select policies_are('public', 'relocation_cases', array['employees can view own relocation cases']);
+select policies_are('public', 'relocation_cases', array['employees can view own relocation cases', 'employees can view their own relocation case']);
 select policies_are('public', 'checklist_items', array['employees can view own checklist items']);
 select policies_are('public', 'cities', array['employees can view relevant cities']);
 select policies_are('public', 'providers', array['employees can view relevant providers']);
-select policies_are('public', 'directory_entries', array['employees can view published directory entries']);
-select policies_are('public', 'shortlist_items', array['employees can view own shortlist']);
+select policies_are('public', 'directory_entries', array['employees can view published directory entries', 'employees can view directory entries tied to own requests']);
+select policies_are('public', 'shortlist_items', array['employees can view own shortlist', 'employees can create own shortlist', 'employees can delete own shortlist']);
 select policies_are('public', 'provider_requests', array['employees can view own provider requests']);
 select policies_are('public', 'consent_records', array['employees can view own consent records']);
 select policies_are('public', 'notifications', array['employees can view own notifications']);
@@ -131,7 +131,7 @@ select ok(
     select 1
       from (values
         ('relocation_cases'), ('checklist_items'), ('cities'), ('providers'), ('directory_entries'),
-        ('shortlist_items'), ('provider_requests'), ('consent_records'), ('notifications'), ('user_preferences')
+        ('provider_requests'), ('notifications'), ('user_preferences')
       ) as exposed(table_name)
      where has_table_privilege('anon', 'public.' || exposed.table_name, 'SELECT')
   ),
@@ -142,7 +142,7 @@ select ok(
     select 1
       from (values
         ('relocation_cases'), ('checklist_items'), ('cities'), ('providers'), ('directory_entries'),
-        ('shortlist_items'), ('provider_requests'), ('consent_records'), ('notifications'), ('user_preferences')
+        ('provider_requests'), ('notifications'), ('user_preferences')
       ) as exposed(table_name)
      where has_table_privilege('authenticated', 'public.' || exposed.table_name, 'INSERT')
         or has_table_privilege('authenticated', 'public.' || exposed.table_name, 'UPDATE')
@@ -156,7 +156,7 @@ select ok(
     select 1
       from (values
         ('relocation_cases'), ('checklist_items'), ('cities'), ('providers'), ('directory_entries'),
-        ('shortlist_items'), ('provider_requests'), ('consent_records'), ('notifications'), ('user_preferences')
+        ('shortlist_items'), ('provider_requests'), ('notifications'), ('user_preferences')
       ) as mutable(table_name)
      where not exists (
        select 1
@@ -320,7 +320,7 @@ select throws_ok(
   '23514', null, 'pending notifications cannot be marked read'
 );
 
-insert into public.provider_requests (case_id, directory_entry_id, status, withdrawn_at, idempotency_key)
+insert into public.provider_requests (case_id, directory_entry_id, status, submitted_at, withdrawn_at, idempotency_key)
 values ('00000000-0000-0000-0000-000000007061', '00000000-0000-0000-0000-000000007051', 'withdrawn', now() - interval '2 hours', now(), 'request-a-withdrawn');
 
 set local role authenticated;

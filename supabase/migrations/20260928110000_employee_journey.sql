@@ -130,6 +130,32 @@ create table if not exists public.user_preferences (
   updated_at timestamptz not null default now()
 );
 
+-- The original growth prototype created relocation_cases with organization_id and
+-- a smaller status enum. Upgrade that table in place so clean installs and
+-- existing development data use the same tenant-scoped employee contract.
+alter table if exists public.relocation_cases add column if not exists tenant_id uuid;
+alter table if exists public.relocation_cases add column if not exists employee_user_id uuid;
+alter table if exists public.relocation_cases add column if not exists destination_city_id uuid;
+alter table if exists public.relocation_cases add column if not exists progress_percent integer default 0;
+alter table if exists public.relocation_cases add column if not exists updated_at timestamptz default now();
+alter table if exists public.relocation_cases alter column organization_id drop not null;
+alter table if exists public.relocation_cases alter column employee_id drop not null;
+alter table if exists public.relocation_cases drop constraint if exists relocation_cases_status_check;
+alter table if exists public.relocation_cases add constraint relocation_cases_status_check
+  check (status in ('draft', 'pending', 'active', 'completed', 'cancelled'));
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+     where conrelid = 'public.relocation_cases'::regclass
+       and conname = 'relocation_cases_progress_percent_check'
+  ) then
+    alter table public.relocation_cases
+      add constraint relocation_cases_progress_percent_check check (progress_percent between 0 and 100);
+  end if;
+end;
+$$;
+
 create unique index if not exists cities_slug_unique on public.cities (slug);
 create unique index if not exists checklist_items_case_key_unique on public.checklist_items (case_id, key);
 create unique index if not exists shortlist_items_user_entry_unique on public.shortlist_items (user_id, directory_entry_id);

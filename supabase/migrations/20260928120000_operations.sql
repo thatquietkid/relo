@@ -81,6 +81,25 @@ create unique index if not exists feature_flags_key_scope_unique on public.featu
 create index if not exists support_cases_tenant_status_idx on public.support_cases (tenant_id, status, created_at desc);
 create index if not exists support_cases_assignee_idx on public.support_cases (assigned_to, status, created_at desc);
 
+create or replace function public.operations_platform_admin()
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public, pg_catalog
+as $$
+declare
+  v_is_admin boolean := false;
+begin
+  if to_regclass('public.platform_admin_users') is null then
+    return false;
+  end if;
+  execute 'select exists (select 1 from public.platform_admin_users where user_id = $1 and role_key = ''platform_admin'')'
+    into v_is_admin using auth.uid();
+  return v_is_admin;
+end;
+$$;
+
 create or replace function public.operations_can_access_tenant(p_tenant_id uuid)
 returns boolean
 language sql
@@ -99,7 +118,7 @@ as $$
        and m.status = 'active'
        and r.key in ('hr', 'admin')
   )
-  or public.is_platform_admin();
+  or public.operations_platform_admin();
 $$;
 
 create or replace function public.reviewer_can_access_scope(p_city_id uuid, p_category text)
@@ -109,7 +128,7 @@ stable
 security definer
 set search_path = public, pg_catalog
 as $$
-  select public.is_platform_admin()
+  select public.operations_platform_admin()
       or exists (
         select 1
           from public.review_assignments ra
@@ -162,6 +181,7 @@ revoke all on function public.operations_can_access_tenant(uuid) from public, an
 revoke all on function public.reviewer_can_access_scope(uuid, text) from public, anon, authenticated;
 revoke all on function public.enforce_program_membership_tenant() from public, anon, authenticated;
 revoke all on function public.enforce_invitation_batch_tenant() from public, anon, authenticated;
+revoke all on function public.operations_platform_admin() from public, anon, authenticated;
 grant execute on function public.operations_can_access_tenant(uuid) to authenticated, service_role;
 grant execute on function public.reviewer_can_access_scope(uuid, text) to authenticated, service_role;
 
@@ -249,17 +269,17 @@ create policy "tenant operators can create invitation batch items"
 
 create policy "reviewers can view own assignments"
   on public.review_assignments for select to authenticated
-  using (reviewer_user_id = auth.uid() or public.is_platform_admin());
+  using (reviewer_user_id = auth.uid() or public.operations_platform_admin());
 
 create policy "platform admins can view feature flags"
   on public.feature_flags for select to authenticated
-  using (public.is_platform_admin());
+  using (public.operations_platform_admin());
 
 create policy "tenant operators can view support cases"
   on public.support_cases for select to authenticated
-  using (public.operations_can_access_tenant(tenant_id) or assigned_to = auth.uid() or public.is_platform_admin());
+  using (public.operations_can_access_tenant(tenant_id) or assigned_to = auth.uid() or public.operations_platform_admin());
 
 create policy "tenant operators can update support cases"
   on public.support_cases for update to authenticated
-  using (public.operations_can_access_tenant(tenant_id) or assigned_to = auth.uid() or public.is_platform_admin())
-  with check (public.operations_can_access_tenant(tenant_id) or assigned_to = auth.uid() or public.is_platform_admin());
+  using (public.operations_can_access_tenant(tenant_id) or assigned_to = auth.uid() or public.operations_platform_admin())
+  with check (public.operations_can_access_tenant(tenant_id) or assigned_to = auth.uid() or public.operations_platform_admin());

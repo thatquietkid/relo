@@ -203,14 +203,14 @@ grant select, insert, update, delete on public.invitations to service_role;
 
 create policy "members can view same tenant"
   on public.tenants for select to authenticated
-  using (id = any (public.current_tenant_ids()));
+  using (id in (select tenant_id from public.current_tenant_ids() as tenant_id));
 
 create policy "members can view same tenant memberships"
   on public.memberships for select to authenticated
   using (
     user_id = auth.uid()
     and status = 'active'
-    and tenant_id = any (public.current_tenant_ids())
+    and tenant_id in (select tenant_id from public.current_tenant_ids() as tenant_id)
   );
 
 create policy "authenticated users can view roles"
@@ -225,7 +225,7 @@ create policy "members can view assigned roles"
      where m.id = membership_roles.membership_id
        and m.user_id = auth.uid()
        and m.status = 'active'
-       and m.tenant_id = any (public.current_tenant_ids())
+       and m.tenant_id in (select tenant_id from public.current_tenant_ids() as tenant_id)
   ));
 
 create policy "tenant HR can view invitations"
@@ -258,12 +258,12 @@ create policy "actors can use idempotency keys"
   on public.idempotency_keys for select to authenticated
   using (
     actor_user_id = auth.uid()
-    and tenant_id = any (public.current_tenant_ids())
+    and tenant_id in (select tenant_id from public.current_tenant_ids() as tenant_id)
   );
 
 create policy "actors can create idempotency keys"
   on public.idempotency_keys for insert to authenticated
   with check (
     actor_user_id = auth.uid()
-    and tenant_id = any (public.current_tenant_ids())
+    and tenant_id in (select tenant_id from public.current_tenant_ids() as tenant_id)
   );
