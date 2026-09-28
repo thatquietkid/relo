@@ -1,0 +1,19 @@
+{
+  "name": "relo-platform",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "api",
+    "web",
+    "worker"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.base.json"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "vitest": "^2.1.8",
+    "typescript": "^5.7.2"
+  }
+}

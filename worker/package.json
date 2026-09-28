@@ -1,0 +1,11 @@
+{
+  "name": "@relo/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@relo/contracts": "0.0.0"
+  }
+}

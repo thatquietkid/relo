@@ -1,0 +1,11 @@
+{
+  "name": "@relo/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./http": "./src/http.ts",
+    "./auth": "./src/auth.ts",
+    "./events": "./src/events.ts"
+  }
+}
