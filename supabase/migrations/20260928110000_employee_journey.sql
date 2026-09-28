@@ -168,6 +168,21 @@ as $$
   );
 $$;
 
+create or replace function public.employee_can_access_tenant(p_tenant_id uuid)
+returns boolean language sql stable security definer
+set search_path = public, pg_catalog
+as $$
+  select exists (
+    select 1
+      from public.memberships m
+      join public.tenants t on t.id = m.tenant_id
+       and t.status = 'active'
+     where m.tenant_id = p_tenant_id
+       and m.user_id = auth.uid()
+       and m.status = 'active'
+  );
+$$;
+
 create or replace function public.employee_can_access_city(p_city_id uuid)
 returns boolean language sql stable security definer
 set search_path = public, pg_catalog
@@ -224,10 +239,12 @@ as $$
 $$;
 
 revoke all on function public.employee_can_access_case(uuid) from public, anon, authenticated;
+revoke all on function public.employee_can_access_tenant(uuid) from public, anon, authenticated;
 revoke all on function public.employee_can_access_city(uuid) from public, anon, authenticated;
 revoke all on function public.employee_can_access_user(uuid) from public, anon, authenticated;
 revoke all on function public.employee_can_view_directory_entry(uuid, text, timestamptz, timestamptz) from public, anon, authenticated;
 grant execute on function public.employee_can_access_case(uuid) to authenticated, service_role;
+grant execute on function public.employee_can_access_tenant(uuid) to authenticated, service_role;
 grant execute on function public.employee_can_access_city(uuid) to authenticated, service_role;
 grant execute on function public.employee_can_access_user(uuid) to authenticated, service_role;
 grant execute on function public.employee_can_view_directory_entry(uuid, text, timestamptz, timestamptz) to authenticated, service_role;
@@ -336,7 +353,7 @@ grant all on public.relocation_cases, public.checklist_items, public.cities, pub
   public.notifications, public.user_preferences to service_role;
 
 create policy "employees can view own relocation cases" on public.relocation_cases
-  for select to authenticated using (employee_user_id = auth.uid() and tenant_id = any (public.current_tenant_ids()));
+  for select to authenticated using (employee_user_id = auth.uid() and public.employee_can_access_tenant(tenant_id));
 create policy "employees can view own checklist items" on public.checklist_items
   for select to authenticated using (public.employee_can_access_case(case_id));
 create policy "employees can view relevant cities" on public.cities

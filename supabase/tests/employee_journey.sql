@@ -4,7 +4,7 @@ create schema if not exists extensions;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth, pg_catalog;
 
-select plan(89);
+select plan(113);
 
 select has_table('public', 'relocation_cases', 'relocation cases table exists');
 select has_table('public', 'checklist_items', 'checklist items table exists');
@@ -19,11 +19,66 @@ select has_table('public', 'user_preferences', 'user preferences table exists');
 
 select has_column('public', 'relocation_cases', 'tenant_id', 'relocation cases keep tenant ownership');
 select has_column('public', 'relocation_cases', 'employee_user_id', 'relocation cases keep employee ownership');
+select has_column('public', 'relocation_cases', 'destination_city_id', 'relocation cases keep destination city');
+select has_column('public', 'relocation_cases', 'status', 'relocation cases keep lifecycle status');
 select has_column('public', 'checklist_items', 'completed_at', 'checklist items record completion');
+select has_column('public', 'checklist_items', 'case_id', 'checklist items belong to a case');
 select has_column('public', 'directory_entries', 'expires_at', 'directory entries record expiry');
+select has_column('public', 'directory_entries', 'provider_id', 'directory entries belong to a provider');
+select has_column('public', 'directory_entries', 'published_at', 'directory entries record publication');
+select has_column('public', 'directory_entries', 'status', 'directory entries keep publication status');
+select has_column('public', 'cities', 'slug', 'cities expose stable slugs');
+select has_column('public', 'providers', 'city_id', 'providers belong to a city');
+select has_column('public', 'shortlist_items', 'user_id', 'shortlist items keep employee ownership');
+select has_column('public', 'shortlist_items', 'directory_entry_id', 'shortlist items reference directory entries');
+select has_column('public', 'provider_requests', 'case_id', 'provider requests belong to a case');
+select has_column('public', 'provider_requests', 'status', 'provider requests keep lifecycle status');
 select has_column('public', 'provider_requests', 'idempotency_key', 'provider requests accept idempotency keys');
+select has_column('public', 'consent_records', 'request_id', 'consent records belong to a request');
+select has_column('public', 'consent_records', 'consented', 'consent records keep the consent decision');
 select has_column('public', 'notifications', 'dedupe_key', 'notifications have dedupe keys');
+select has_column('public', 'notifications', 'delivery_status', 'notifications keep delivery status');
 select has_column('public', 'user_preferences', 'privacy_settings', 'preferences store privacy settings');
+select has_column('public', 'user_preferences', 'notification_settings', 'preferences store notification settings');
+
+select ok(to_regprocedure('public.employee_can_access_tenant(uuid)') is not null, 'tenant access helper exists');
+select ok(
+  (select proconfig @> array['search_path=public, pg_catalog']
+     from pg_proc
+    where oid = 'public.employee_can_access_tenant(uuid)'::regprocedure),
+  'tenant access helper fixes its search path'
+);
+
+select ok(
+  not exists (
+    select 1
+      from (values
+        ('relocation_cases', 'id'),
+        ('checklist_items', 'id'),
+        ('cities', 'id'),
+        ('providers', 'id'),
+        ('directory_entries', 'id'),
+        ('shortlist_items', 'id'),
+        ('provider_requests', 'id'),
+        ('consent_records', 'id'),
+        ('notifications', 'id'),
+        ('user_preferences', 'user_id')
+      ) as required(table_name, column_name)
+     where not exists (
+       select 1
+         from pg_constraint c
+         join pg_attribute a
+           on a.attrelid = c.conrelid
+          and a.attnum = any(c.conkey)
+        where c.conrelid = ('public.' || required.table_name)::regclass
+          and c.contype = 'p'
+          and a.attname = required.column_name
+          and a.atttypid = 'uuid'::regtype
+          and c.conkey = array[a.attnum]::smallint[]
+     )
+  ),
+  'all employee tables use single-column UUID primary keys'
+);
 
 select has_rls('public', 'relocation_cases');
 select has_rls('public', 'checklist_items');
@@ -71,8 +126,48 @@ select policies_are('public', 'notifications', array['employees can view own not
 select policies_are('public', 'user_preferences', array['employees can view own preferences']);
 
 select ok(not has_table_privilege('anon', 'public.relocation_cases', 'SELECT'), 'anonymous cannot read relocation cases');
-select ok(not has_table_privilege('authenticated', 'public.provider_requests', 'INSERT'), 'provider request writes stay server-side');
-select ok(not has_table_privilege('authenticated', 'public.user_preferences', 'UPDATE'), 'preference writes stay server-side');
+select ok(
+  not exists (
+    select 1
+      from (values
+        ('relocation_cases'), ('checklist_items'), ('cities'), ('providers'), ('directory_entries'),
+        ('shortlist_items'), ('provider_requests'), ('consent_records'), ('notifications'), ('user_preferences')
+      ) as exposed(table_name)
+     where has_table_privilege('anon', 'public.' || exposed.table_name, 'SELECT')
+  ),
+  'anonymous cannot read any exposed employee table'
+);
+select ok(
+  not exists (
+    select 1
+      from (values
+        ('relocation_cases'), ('checklist_items'), ('cities'), ('providers'), ('directory_entries'),
+        ('shortlist_items'), ('provider_requests'), ('consent_records'), ('notifications'), ('user_preferences')
+      ) as exposed(table_name)
+     where has_table_privilege('authenticated', 'public.' || exposed.table_name, 'INSERT')
+        or has_table_privilege('authenticated', 'public.' || exposed.table_name, 'UPDATE')
+        or has_table_privilege('authenticated', 'public.' || exposed.table_name, 'DELETE')
+  ),
+  'authenticated employee writes remain server-side for all exposed tables'
+);
+
+select ok(
+  not exists (
+    select 1
+      from (values
+        ('relocation_cases'), ('checklist_items'), ('cities'), ('providers'), ('directory_entries'),
+        ('shortlist_items'), ('provider_requests'), ('consent_records'), ('notifications'), ('user_preferences')
+      ) as mutable(table_name)
+     where not exists (
+       select 1
+         from pg_trigger
+        where tgrelid = ('public.' || mutable.table_name)::regclass
+          and tgname = mutable.table_name || '_set_updated_at'
+          and not tgisinternal
+     )
+  ),
+  'all mutable employee tables have updated_at triggers'
+);
 
 insert into auth.users (id, email)
 values
@@ -80,21 +175,24 @@ values
   ('00000000-0000-0000-0000-000000007002', 'employee-b@example.com')
 on conflict (id) do nothing;
 
-insert into public.tenants (id, name, slug)
+insert into public.tenants (id, name, slug, status)
 values
-  ('00000000-0000-0000-0000-000000007011', 'Employee Tenant A', 'employee-tenant-a'),
-  ('00000000-0000-0000-0000-000000007012', 'Employee Tenant B', 'employee-tenant-b');
+  ('00000000-0000-0000-0000-000000007011', 'Employee Tenant A', 'employee-tenant-a', 'active'),
+  ('00000000-0000-0000-0000-000000007012', 'Employee Tenant B', 'employee-tenant-b', 'active'),
+  ('00000000-0000-0000-0000-000000007013', 'Suspended Employee Tenant', 'employee-tenant-suspended', 'suspended');
 
 insert into public.memberships (id, tenant_id, user_id, status)
 values
   ('00000000-0000-0000-0000-000000007021', '00000000-0000-0000-0000-000000007011', '00000000-0000-0000-0000-000000007001', 'active'),
-  ('00000000-0000-0000-0000-000000007022', '00000000-0000-0000-0000-000000007012', '00000000-0000-0000-0000-000000007002', 'active');
+  ('00000000-0000-0000-0000-000000007022', '00000000-0000-0000-0000-000000007012', '00000000-0000-0000-0000-000000007002', 'active'),
+  ('00000000-0000-0000-0000-000000007023', '00000000-0000-0000-0000-000000007013', '00000000-0000-0000-0000-000000007001', 'active');
 
 insert into public.membership_roles (membership_id, role_id)
 select membership_id, (select id from public.roles where key = 'employee')
   from (values
     ('00000000-0000-0000-0000-000000007021'::uuid),
-    ('00000000-0000-0000-0000-000000007022'::uuid)
+    ('00000000-0000-0000-0000-000000007022'::uuid),
+    ('00000000-0000-0000-0000-000000007023'::uuid)
   ) as memberships(membership_id);
 
 insert into public.cities (id, country_code, name, slug, timezone, status)
@@ -117,7 +215,8 @@ values
 insert into public.relocation_cases (id, tenant_id, employee_user_id, destination_city_id, move_date, status, progress_percent)
 values
   ('00000000-0000-0000-0000-000000007061', '00000000-0000-0000-0000-000000007011', '00000000-0000-0000-0000-000000007001', '00000000-0000-0000-0000-000000007031', '2026-11-15', 'active', 25),
-  ('00000000-0000-0000-0000-000000007062', '00000000-0000-0000-0000-000000007012', '00000000-0000-0000-0000-000000007002', '00000000-0000-0000-0000-000000007032', '2026-12-01', 'active', 40);
+  ('00000000-0000-0000-0000-000000007062', '00000000-0000-0000-0000-000000007012', '00000000-0000-0000-0000-000000007002', '00000000-0000-0000-0000-000000007032', '2026-12-01', 'active', 40),
+  ('00000000-0000-0000-0000-000000007063', '00000000-0000-0000-0000-000000007013', '00000000-0000-0000-0000-000000007001', '00000000-0000-0000-0000-000000007031', '2026-12-15', 'active', 10);
 
 insert into public.checklist_items (id, case_id, key, title, description, state, due_at, completed_at, sort_order)
 values
@@ -180,6 +279,24 @@ select throws_ok(
 );
 
 select throws_ok(
+  $$insert into public.directory_entries (provider_id, title, description, published_at, expires_at, status)
+      values ('00000000-0000-0000-0000-000000007041'::uuid, 'Invalid expiry', 'Expiry before publication', now(), now() - interval '1 hour', 'published')$$,
+  '23514', null, 'directory entries reject expiry before publication'
+);
+
+select throws_ok(
+  $$insert into public.directory_entries (provider_id, title, description, status)
+      values ('00000000-0000-0000-0000-000000007041'::uuid, 'Missing publication', 'Published entries need a publication timestamp', 'published')$$,
+  '23514', null, 'published directory entries require publication timestamps'
+);
+
+select throws_ok(
+  $$insert into public.consent_records (request_id, field_name, consented, withdrawn_at)
+      values ('00000000-0000-0000-0000-000000007091'::uuid, 'email', false, now())$$,
+  '23514', null, 'withdrawn consent records must preserve a consented decision'
+);
+
+select throws_ok(
   $$update public.relocation_cases set status = 'draft'
       where id = '00000000-0000-0000-0000-000000007061'::uuid$$,
   '23514', null, 'invalid relocation status transitions are rejected'
@@ -204,7 +321,7 @@ select throws_ok(
 );
 
 insert into public.provider_requests (case_id, directory_entry_id, status, withdrawn_at, idempotency_key)
-values ('00000000-0000-0000-0000-000000007061', '00000000-0000-0000-0000-000000007051', 'withdrawn', now(), 'request-a-withdrawn');
+values ('00000000-0000-0000-0000-000000007061', '00000000-0000-0000-0000-000000007051', 'withdrawn', now() - interval '2 hours', now(), 'request-a-withdrawn');
 
 set local role authenticated;
 set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000007001';
@@ -218,6 +335,7 @@ select is((select count(*) from public.notifications), 1::bigint, 'employee A ca
 select is((select count(*) from public.user_preferences), 1::bigint, 'employee A can read only own preferences');
 
 select is_empty($$select 1 from public.relocation_cases where id = '00000000-0000-0000-0000-000000007062'::uuid$$, 'employee A cannot read employee B relocation case');
+select is_empty($$select 1 from public.relocation_cases where id = '00000000-0000-0000-0000-000000007063'::uuid$$, 'active membership cannot read a suspended tenant relocation case');
 select is_empty($$select 1 from public.checklist_items where id = '00000000-0000-0000-0000-000000007072'::uuid$$, 'employee A cannot read employee B checklist');
 select is_empty($$select 1 from public.shortlist_items where id = '00000000-0000-0000-0000-000000007082'::uuid$$, 'employee A cannot read employee B shortlist');
 select is_empty($$select 1 from public.provider_requests where id = '00000000-0000-0000-0000-000000007092'::uuid$$, 'employee A cannot read employee B request');
