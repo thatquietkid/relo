@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
-import { makeCaseService } from '../src/employee/case-service.js';
+import { DEFAULT_CHECKLIST_ITEMS, makeCaseService } from '../src/employee/case-service.js';
 import {
+  type ActivateCaseInput,
+  type AtomicChecklistMutationInput,
   makeChecklistService,
+  type RelocationActivationResult,
   type EmployeeRepository,
   type EmployeeRepositoryTransaction,
   type EmployeeEvent,
@@ -79,6 +82,7 @@ class InMemoryEmployeeRepository implements EmployeeRepository {
   items: ChecklistItemRow[];
   idempotency = new Map<string, IdempotencyRecord>();
   events: EmployeeEvent[] = [];
+  setChecklistStateAtomic?: EmployeeRepository['setChecklistStateAtomic'];
 
   constructor(cases = [relocationCase()], items = [checklistItem()]) {
     this.cases = structuredClone(cases);
@@ -121,7 +125,9 @@ class InMemoryEmployeeRepository implements EmployeeRepository {
   }
 
   async findIdempotency(tenantId: string, actorUserId: string, key: string): Promise<IdempotencyRecord | null> {
-    return this.idempotency.get(`${tenantId}:${actorUserId}:${key}`) ?? null;
+    const record = this.idempotency.get(`${tenantId}:${actorUserId}:${key}`) ?? null;
+    if (record?.expiresAt && record.expiresAt <= timestamps.updated) return null;
+    return record;
   }
 
   async saveIdempotency(record: IdempotencyRecord): Promise<void> {
@@ -130,6 +136,47 @@ class InMemoryEmployeeRepository implements EmployeeRepository {
 
   async appendEvent(event: EmployeeEvent): Promise<void> {
     this.events.push(structuredClone(event));
+  }
+
+  async activateCase(input: ActivateCaseInput): Promise<RelocationActivationResult> {
+    const row = this.cases.find(
+      (candidate) => candidate.employee_user_id === input.userId && candidate.tenant_id === input.tenantId,
+    );
+    if (!row) throw new Error('case missing');
+    if (row.status === 'draft') {
+      row.status = 'active';
+      for (const item of input.defaults) {
+        if (!this.items.some((candidate) => candidate.case_id === row.id && candidate.key === item.key)) {
+          this.items.push({
+            id: `generated-${item.key}`,
+            case_id: row.id,
+            key: item.key,
+            title: item.title,
+            description: item.description,
+            state: 'pending',
+            due_at: item.due_at,
+            completed_at: null,
+            sort_order: item.sort_order,
+            created_at: timestamps.created,
+            updated_at: timestamps.updated,
+          });
+        }
+      }
+      this.events.push({
+        id: 'activation-event',
+        type: 'RelocationCaseActivated',
+        version: 1,
+        occurredAt: timestamps.updated,
+        tenantId: row.tenant_id,
+        actorId: input.userId,
+        traceId: input.traceId,
+        payload: { tenant_id: row.tenant_id, case_id: row.id, employee_user_id: row.employee_user_id },
+      });
+    }
+    return {
+      relocationCase: structuredClone(row),
+      checklist: structuredClone(this.items.filter((item) => item.case_id === row.id)),
+    };
   }
 
   count(type: EmployeeEvent['type']): number {
@@ -146,7 +193,33 @@ function services(repository: InMemoryEmployeeRepository) {
   };
 }
 
+
 describe('employee relocation case and checklist services', () => {
+  it('activates a draft case once, generates defaults, and emits one activation event', async () => {
+    const repository = new InMemoryEmployeeRepository([relocationCase({ status: 'draft' })], []);
+    const { caseService } = services(repository);
+
+    const first = await caseService.activateMyRelocationCase(identity(), 'activation-trace');
+    const second = await caseService.activateMyRelocationCase(identity(), 'activation-trace');
+
+    expect(first).toMatchObject({ id: 'case-a', status: 'active', progress_percent: 0 });
+    expect(second).toEqual(first);
+    expect(repository.items).toHaveLength(DEFAULT_CHECKLIST_ITEMS.length);
+    expect(repository.count('RelocationCaseActivated')).toBe(1);
+    expect(repository.events.find((event) => event.type === 'RelocationCaseActivated')).toEqual(expect.objectContaining({
+      version: 1,
+      occurredAt: timestamps.updated,
+      tenantId: 'tenant-a',
+      actorId: 'employee-a',
+      traceId: 'activation-trace',
+      payload: {
+        tenant_id: 'tenant-a',
+        case_id: 'case-a',
+        employee_user_id: 'employee-a',
+      },
+    }));
+  });
+
   it('reads the employee case and calculates progress from completed rows', async () => {
     const repository = new InMemoryEmployeeRepository(
       [relocationCase()],
@@ -194,11 +267,57 @@ describe('employee relocation case and checklist services', () => {
     const repository = new InMemoryEmployeeRepository();
     const { checklistService } = services(repository);
 
-    const first = await checklistService.setChecklistState(identity(), 'case-a', 'item-a', 'completed', 'check-1');
-    const second = await checklistService.setChecklistState(identity(), 'case-a', 'item-a', 'completed', 'check-1');
+    const first = await checklistService.setChecklistState(identity(), 'case-a', 'item-a', 'completed', 'check-1', 'trace-complete');
+    const second = await checklistService.setChecklistState(identity(), 'case-a', 'item-a', 'completed', 'check-1', 'trace-complete');
 
     expect(second).toEqual(first);
     expect(first).toMatchObject({ state: 'completed', completed_at: '2026-09-28T12:00:00.000Z' });
+    expect(repository.count('ChecklistItemCompleted')).toBe(1);
+    expect(repository.events.find((event) => event.type === 'ChecklistItemCompleted')).toMatchObject({
+      traceId: 'trace-complete',
+      payload: { completed_at: '2026-09-28T12:00:00.000Z' },
+    });
+  });
+
+  it('reclaims an expired idempotency key before applying a new mutation', async () => {
+    const repository = new InMemoryEmployeeRepository();
+    repository.idempotency.set('tenant-a:employee-a:check-expired', {
+      tenantId: 'tenant-a',
+      actorUserId: 'employee-a',
+      key: 'check-expired',
+      requestHash: 'expired-hash',
+      expiresAt: '2026-09-27T00:00:00.000Z',
+      response: checklistItem(),
+    });
+    const { checklistService } = services(repository);
+
+    await expect(checklistService.setChecklistState(identity(), 'case-a', 'item-a', 'completed', 'check-expired'))
+      .resolves.toMatchObject({ state: 'completed' });
+    expect(repository.count('ChecklistItemCompleted')).toBe(1);
+  });
+
+  it('reclaims an expired idempotency record returned by the repository', async () => {
+    const repository = new InMemoryEmployeeRepository();
+    const findIdempotency = vi.spyOn(repository, 'findIdempotency').mockResolvedValue({
+      tenantId: 'tenant-a',
+      actorUserId: 'employee-a',
+      key: 'check-expired-from-repository',
+      requestHash: 'expired-hash',
+      expiresAt: '2026-09-28T11:59:59.999Z',
+      response: checklistItem(),
+    });
+    const { checklistService } = services(repository);
+
+    await expect(
+      checklistService.setChecklistState(
+        identity(),
+        'case-a',
+        'item-a',
+        'completed',
+        'check-expired-from-repository',
+      ),
+    ).resolves.toMatchObject({ state: 'completed' });
+    expect(findIdempotency).toHaveBeenCalledOnce();
     expect(repository.count('ChecklistItemCompleted')).toBe(1);
   });
 
@@ -227,6 +346,47 @@ describe('employee relocation case and checklist services', () => {
 
     await expect(checklistService.setChecklistState(identity(), 'case-a', 'item-a', 'in_progress', 'check-5'))
       .resolves.toMatchObject({ state: 'in_progress', completed_at: null });
+  });
+
+  it('delegates mutations to the atomic repository hook with tenant, hash, and trace context', async () => {
+    const repository = new InMemoryEmployeeRepository();
+    let queue = Promise.resolve();
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const atomicMutation = vi.fn(async (input: AtomicChecklistMutationInput) => {
+      const previous = queue;
+      let release!: () => void;
+      queue = new Promise<void>((resolve) => { release = resolve; });
+      await previous;
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      expect(input.userId).toBe('employee-a');
+      expect(input.tenantId).toBe('tenant-a');
+      expect(input.caseId).toBe('case-a');
+      expect(input.itemId).toBe('item-a');
+      expect(input.state).toBe('completed');
+      expect(input.idempotencyKey).toBe('check-atomic');
+      expect(input.requestHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(input.traceId).toBe('trace-atomic');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      inFlight -= 1;
+      release();
+      return checklistItem({ state: 'completed', completed_at: '2026-09-28T12:00:00.000Z' });
+    });
+    repository.setChecklistStateAtomic = atomicMutation;
+    const transaction = vi.spyOn(repository, 'withTransaction');
+    const { checklistService } = services(repository);
+
+    const results = await Promise.all([
+      checklistService.setChecklistState(identity(), 'case-a', 'item-a', 'completed', 'check-atomic', 'trace-atomic'),
+      checklistService.setChecklistState(identity(), 'case-a', 'item-a', 'completed', 'check-atomic', 'trace-atomic'),
+    ]);
+
+    expect(results[0]).toMatchObject({ state: 'completed', completed_at: '2026-09-28T12:00:00.000Z' });
+    expect(results[1]).toEqual(results[0]);
+    expect(atomicMutation).toHaveBeenCalledTimes(2);
+    expect(maxInFlight).toBe(1);
+    expect(transaction).not.toHaveBeenCalled();
   });
 });
 
@@ -286,6 +446,25 @@ describe('employee relocation checklist routes', () => {
     });
     expect(invalid.statusCode).toBe(400);
     expect(invalid.json().error).toMatchObject({ code: 'VALIDATION_ERROR', requestId: expect.any(String) });
+    await app.close();
+  });
+
+  it('uses the server-side employee repository factory when no test repository is injected', async () => {
+    const repository = new InMemoryEmployeeRepository();
+    const createEmployeeRepository = vi.fn().mockReturnValue(repository);
+    const app = createApp({ logger: false }, {
+      authService: authServiceFor(),
+      createEmployeeRepository,
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/me/relocation',
+      headers: { authorization: 'Bearer employee-token' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(createEmployeeRepository).toHaveBeenCalledWith('employee-token');
     await app.close();
   });
 });

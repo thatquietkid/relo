@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import type { DomainEvent } from '@relo/contracts/events';
 import { assertMembershipActive } from '../authorization/policy.js';
 import { ApiError } from '../shared/errors.js';
 import type { IdentityContext } from '../identity/types.js';
@@ -19,22 +20,50 @@ export type EmployeeEventType =
   | 'ChecklistItemCompleted'
   | 'ChecklistProgressChanged';
 
-export interface EmployeeEvent {
-  id: string;
+export type EmployeeEvent = DomainEvent<Record<string, unknown>> & {
   type: EmployeeEventType;
-  version: 1;
-  occurredAt: string;
   tenantId: string;
   actorId: string;
-  payload: Record<string, unknown>;
-}
+};
 
 export interface IdempotencyRecord {
   tenantId: string;
   actorUserId: string;
   key: string;
   requestHash: string;
+  expiresAt?: string;
   response: ChecklistItemView;
+}
+
+export interface DefaultChecklistItem {
+  key: string;
+  title: string;
+  description: string | null;
+  due_at: string | null;
+  sort_order: number;
+}
+
+export interface ActivateCaseInput {
+  userId: string;
+  tenantId: string;
+  defaults: readonly DefaultChecklistItem[];
+  traceId: string;
+}
+
+export interface RelocationActivationResult {
+  relocationCase: RelocationCaseRow;
+  checklist: ChecklistItemRow[];
+}
+
+export interface AtomicChecklistMutationInput {
+  userId: string;
+  tenantId: string;
+  caseId: string;
+  itemId: string;
+  state: ChecklistItemState;
+  idempotencyKey: string;
+  requestHash: string;
+  traceId: string;
 }
 
 export interface EmployeeOutboxPort {
@@ -60,6 +89,16 @@ export interface EmployeeRepositoryTransaction extends EmployeeOutboxPort, Emplo
 
 export interface EmployeeRepository extends EmployeeRepositoryTransaction {
   withTransaction<T>(work: (transaction: EmployeeRepositoryTransaction) => Promise<T>): Promise<T>;
+  /**
+   * Performs activation, default checklist generation, and its outbox write
+   * under the repository's concurrency boundary.
+   */
+  activateCase?(input: ActivateCaseInput): Promise<RelocationActivationResult>;
+  /**
+   * Performs the checklist mutation, idempotency replay/conflict check, and
+   * outbox writes atomically at the repository boundary.
+   */
+  setChecklistStateAtomic?(input: AtomicChecklistMutationInput): Promise<ChecklistItemView>;
 }
 
 export interface ChecklistService {
@@ -70,6 +109,7 @@ export interface ChecklistService {
     itemId: string,
     state: ChecklistItemState,
     idempotencyKey: string,
+    traceId?: string,
   ): Promise<ChecklistItemView>;
 }
 
@@ -94,8 +134,8 @@ export function notFoundError(): ApiError {
 }
 
 export function assertOwnCase(identity: IdentityContext, row: RelocationCaseRow | null): RelocationCaseRow {
-  if (!row || row.status === 'cancelled') throw notFoundError();
   const membership = selectEmployeeMembership(identity);
+  if (!row || row.status === 'cancelled') throw notFoundError();
   if (row.employee_user_id !== identity.user.id || row.tenant_id !== membership.tenant_id) {
     throw new ApiError(403, 'FORBIDDEN', 'You do not have access to this relocation case.');
   }
@@ -116,6 +156,12 @@ function requestHash(caseId: string, itemId: string, state: ChecklistItemState):
   return createHash('sha256')
     .update(JSON.stringify({ caseId, itemId, state }), 'utf8')
     .digest('hex');
+}
+
+function idempotencyRecordIsActive(record: IdempotencyRecord, at: Date): boolean {
+  if (!record.expiresAt) return true;
+  const expiresAt = Date.parse(record.expiresAt);
+  return Number.isFinite(expiresAt) && expiresAt > at.getTime();
 }
 
 function invalidTransition(from: ChecklistItemState, to: ChecklistItemState): ApiError {
@@ -146,6 +192,7 @@ function event(
   identity: IdentityContext,
   tenantId: string,
   occurredAt: string,
+  traceId: string,
   payload: Record<string, unknown>,
 ): EmployeeEvent {
   return {
@@ -155,6 +202,7 @@ function event(
     occurredAt,
     tenantId,
     actorId: identity.user.id,
+    traceId,
     payload,
   };
 }
@@ -172,18 +220,36 @@ export function makeChecklistService({
       return repository.listChecklist(row.id);
     },
 
-    async setChecklistState(identity, caseId, itemId, state, idempotencyKey) {
+    async setChecklistState(identity, caseId, itemId, state, idempotencyKey, traceId = randomUUID()) {
       const parsedState = checklistStateSchema.safeParse(state);
       if (!parsedState.success) throw validationError(parsedState.error);
 
       const membership = selectEmployeeMembership(identity);
       const hash = requestHash(caseId, itemId, parsedState.data);
 
+      if (repository.setChecklistStateAtomic) {
+        return repository.setChecklistStateAtomic({
+          userId: identity.user.id,
+          tenantId: membership.tenant_id,
+          caseId,
+          itemId,
+          state: parsedState.data,
+          idempotencyKey,
+          requestHash: hash,
+          traceId,
+        });
+      }
+
       return repository.withTransaction(async (transaction) => {
+        const currentTime = now();
         const existing = await transaction.findIdempotency(membership.tenant_id, identity.user.id, idempotencyKey);
-        if (existing) {
+        if (existing && idempotencyRecordIsActive(existing, currentTime)) {
           if (existing.requestHash !== hash) {
-            throw new ApiError(409, 'IDEMPOTENCY_KEY_CONFLICT', 'The idempotency key was used for a different mutation.');
+            throw new ApiError(
+              409,
+              'IDEMPOTENCY_KEY_CONFLICT',
+              'The idempotency key was used for a different mutation.',
+            );
           }
           return existing.response;
         }
@@ -197,7 +263,7 @@ export function makeChecklistService({
         }
 
         const stateChanged = item.state !== parsedState.data;
-        const timestamp = now().toISOString();
+        const timestamp = currentTime.toISOString();
         const completedAt = parsedState.data === 'completed'
           ? item.completed_at ?? timestamp
           : null;
@@ -219,6 +285,7 @@ export function makeChecklistService({
               identity,
               row.tenant_id,
               timestamp,
+              traceId,
               {
                 tenant_id: row.tenant_id,
                 case_id: row.id,
@@ -234,12 +301,14 @@ export function makeChecklistService({
               identity,
               row.tenant_id,
               timestamp,
+              traceId,
               {
                 tenant_id: row.tenant_id,
                 case_id: row.id,
                 employee_user_id: row.employee_user_id,
                 item_id: item.id,
                 state: parsedState.data,
+                completed_at: completedAt,
               },
             ));
           }
@@ -250,6 +319,7 @@ export function makeChecklistService({
           actorUserId: identity.user.id,
           key: idempotencyKey,
           requestHash: hash,
+          expiresAt: new Date(currentTime.getTime() + 24 * 60 * 60 * 1000).toISOString(),
           response: updated,
         });
         return updated;
