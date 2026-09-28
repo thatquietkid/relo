@@ -70,7 +70,7 @@ export interface HrRepository {
 
 export interface CreateEmployeeInvitationInput { email: string; name?: string; role?: string; }
 
-function assertHr(identity: IdentityContext): { tenantId: string; userId: string } {
+export function tenantForHr(identity: IdentityContext): { tenantId: string; userId: string } {
   const membership = identity.memberships.find((candidate) => candidate.status === 'active'
     && candidate.tenant.status === 'active'
     && candidate.roles.some((role) => role.key === 'hr' || role.key === 'admin'));
@@ -118,7 +118,7 @@ export function makeHrService({
 
   return {
     async listTenantEmployees(identity: IdentityContext, input: { page?: number; pageSize?: number; search?: string } = {}): Promise<EmployeePage> {
-      const { tenantId } = assertHr(identity);
+      const { tenantId } = tenantForHr(identity);
       const page = Number.isInteger(input.page) && (input.page ?? 0) > 0 ? input.page! : 1;
       const pageSize = Number.isInteger(input.pageSize) && (input.pageSize ?? 0) > 0 ? Math.min(input.pageSize!, 100) : 20;
       const search = input.search?.trim().replace(/\s+/g, ' ');
@@ -128,7 +128,7 @@ export function makeHrService({
     },
 
     async createEmployeeInvitation(identity: IdentityContext, input: CreateEmployeeInvitationInput, idempotencyKey: string): Promise<InvitationView> {
-      const { tenantId, userId } = assertHr(identity);
+      const { tenantId, userId } = tenantForHr(identity);
       if (input.role && input.role !== 'employee') throw new ApiError(403, 'ROLE_NOT_ALLOWED', 'HR can only invite employees.');
       const email = normalizeEmail(input.email);
       if (!idempotencyKey || idempotencyKey.length < 8) throw new ApiError(400, 'VALIDATION_ERROR', 'A valid idempotency key is required.');
@@ -155,7 +155,7 @@ export function makeHrService({
     },
 
     async resendEmployeeInvitation(identity: IdentityContext, invitationId: string, idempotencyKey: string): Promise<InvitationView> {
-      const { tenantId, userId } = assertHr(identity);
+      const { tenantId, userId } = tenantForHr(identity);
       if (!idempotencyKey || idempotencyKey.length < 8) throw new ApiError(400, 'VALIDATION_ERROR', 'A valid idempotency key is required.');
       const existing = await repository.getInvitation(tenantId, invitationId);
       if (!existing || existing.status !== 'pending') throw new ApiError(404, 'NOT_FOUND', 'The invitation was not found.');
@@ -167,7 +167,7 @@ export function makeHrService({
     },
 
     async revokeEmployeeInvitation(identity: IdentityContext, invitationId: string): Promise<InvitationView> {
-      const { tenantId } = assertHr(identity);
+      const { tenantId } = tenantForHr(identity);
       const result = await repository.revokeInvitation(tenantId, invitationId);
       if (!result) throw new ApiError(404, 'NOT_FOUND', 'The invitation was not found.');
       return invitationView(result);
