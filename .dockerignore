@@ -1,0 +1,14 @@
+.git
+.gitignore
+.codex
+docs
+PM_problem_statement.txt
+PM_Submission.pdf
+node_modules
+npm-debug.log*
+.env
+.env.*
+*.log
+*.tmp
+*.swp
+Thumbs.db

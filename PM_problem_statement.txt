@@ -1,0 +1,32 @@
+Relo: Corporate Relocation Onboarding Platform
+1. Problem Statement
+Relocating employees need a way to settle into a new city without stitching together housing,
+local services, and orientation from scattered broker apps and word of mouth, because what
+actually holds them back isn't a shortage of options, it's the absence of a source they can trust
+from day one.
+2. User Persona
+Persona A, End User: Rohan Verma, 28, Senior Analyst, just transferred from Pune to
+Bangalore and joins in three weeks. He doesn't know anyone in the city yet. His biggest worry is
+finding a safe place near oƯice and figuring out how long it'll take to feel settled. His current plan
+is "figure it out once I land there," which isn't really a plan. He won't go looking for five diƯerent
+apps to solve five diƯerent problems, but if his company gave him one app on day one, he would
+use it without a second thought. It's not that the information doesn't exist, it's that none of it
+comes with anyone vouching for it, and that's the part he's actually missing.
+Persona B, Buyer: Ananya Krishnan, 34, HR Manager for Talent Mobility, handles 40 to 50
+transfers a year with a fixed allowance, an emailed checklist, and some informal help from
+employees already living in that city. She knows this isn't enough since relocation issues have
+come up in exit interviews before, but she doesn't have the budget for a full relocation desk
+outside leadership moves. She wants something she can plug straight into onboarding,
+something that reduces the constant back and forth queries to her team, and something she
+can point to as an actual benefit when convincing someone to accept a transfer.
+3. Rationale
+Relo is built B2B because the incentives simply work better on the employer side. An employee
+who relocates once every few years has little reason to pay for or go find a dedicated app on his
+own, but he'll use one in a heartbeat if it shows up already endorsed by his company. That's
+really the whole insight behind this: the missing piece for Rohan was never information, it was
+trust, and trust is something an employer can hand over instantly in a way a random app never
+can. HR, on the other hand, treats relocation as a recurring, budgeted problem, so Ananya is
+essentially paying to cut attrition risk, reduce manual queries, and make the transfer oƯer more
+attractive. This also gives us a cleaner path to market. Instead of acquiring relocating employees
+one at a time, which is slow and low trust, we sell to HR teams as a single onboarding decision,
+and employees end up using it automatically every time a relocation happens.
