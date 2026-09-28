@@ -1,0 +1,11 @@
+{
+  "name": "Relo",
+  "short_name": "Relo",
+  "description": "Relocation made calmer for employees and mobility teams.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f1e8",
+  "theme_color": "#12333c",
+  "orientation": "portrait-primary",
+  "icons": []
+}

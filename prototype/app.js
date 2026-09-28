@@ -60,36 +60,37 @@ function initials(user) {
 function renderLogin() {
   app.innerHTML = `
     <main class="login-shell">
-      <section class="login-card">
+      <section class="login-story">
         <div class="brand login-brand"><span class="brand-mark">r</span><span class="brand-name">relo</span></div>
-        <div class="eyebrow">Employer-backed relocation</div>
-        <h1>A calmer start to a new city.</h1>
-        <p class="login-copy">Relo keeps the next useful step, trusted local support, and your privacy in one place.</p>
+        <div class="story-intro"><span class="eyebrow">Employer-backed relocation</span><span class="story-location">Bengaluru · 2026</span></div>
+        <div class="story-count"><strong>18</strong><span>days until move-in</span></div>
+        <h1>Make the new city feel less like a checklist.</h1>
+        <p class="login-copy">A quieter way to prepare for a move — one useful step, trusted local support, and a little more certainty at a time.</p>
+        <div class="story-route" aria-label="The Relo relocation path">
+          <div class="route-line"></div>
+          <div class="route-stop is-done"><span>01</span><strong>Prepare</strong><small>Get oriented</small></div>
+          <div class="route-stop is-active"><span>02</span><strong>Settle</strong><small>Choose what fits</small></div>
+          <div class="route-stop"><span>03</span><strong>Arrive</strong><small>Start feeling local</small></div>
+        </div>
+        <p class="story-note">Designed for the people moving — and the teams helping them get there.</p>
+      </section>
+      <section class="login-card">
+        <div class="login-panel-heading"><span class="eyebrow">Welcome back</span><span class="secure-note"><span class="secure-dot"></span>Private workspace</span></div>
+        <h2>Pick up where you left off.</h2>
+        <p class="login-panel-copy">Sign in with your work email to continue your relocation plan.</p>
         <form id="login-form" class="login-form">
           <div class="field"><label for="login-email">Work email</label><input id="login-email" type="email" autocomplete="email" required placeholder="you@company.com" /></div>
           <div class="field"><label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password" required placeholder="Your password" /></div>
           ${state.auth.error ? `<div class="login-error" role="alert">${escapeHtml(state.auth.error)}</div>` : ''}
-          <button class="button button-dark login-submit" type="submit">Sign in</button>
+          <button class="button button-dark login-submit" type="submit"><span>Sign in</span><span class="button-arrow">↗</span></button>
         </form>
-        <div class="login-divider"><span>Configured access</span></div>
+        <div class="login-divider"><span>Prototype access</span></div>
         <div class="login-demo-grid">
-          <button class="login-demo" data-demo-login="employee"><strong>Employee account</strong><span>Fill configured account</span></button>
-          <button class="login-demo" data-demo-login="hr"><strong>HR account</strong><span>Fill configured account</span></button>
+          <button class="login-demo" data-demo-login="employee"><span class="demo-icon">↗</span><span><strong>Employee</strong><small>See your move plan</small></span></button>
+          <button class="login-demo" data-demo-login="hr"><span class="demo-icon">◒</span><span><strong>HR / admin</strong><small>Open programme view</small></span></button>
         </div>
         <p class="login-footnote">Email verification, password reset, and invitations are delivered through the backend SMTP boundary.</p>
       </section>
-      <aside class="login-rail">
-        <div class="eyebrow">The growth loop</div>
-        <h2>Measure the moments that make relocation work.</h2>
-        <p>Relo treats the employee experience as a connected loop, not a one-time form.</p>
-        <div class="login-principles">
-          <div><span>01</span><strong>Acquisition</strong><p>Invite the right people with less friction.</p></div>
-          <div><span>02</span><strong>Activation</strong><p>Help every employee take a first useful action.</p></div>
-          <div><span>03</span><strong>Retention</strong><p>Keep progress visible between milestones.</p></div>
-          <div><span>04</span><strong>Referral</strong><p>Turn helpful local knowledge into trust.</p></div>
-          <div><span>05</span><strong>Revenue</strong><p>Make programme value legible to the business.</p></div>
-        </div>
-      </aside>
     </main>`;
 }
 
@@ -113,6 +114,9 @@ function renderShell() {
       <header class="topbar"><div><div class="eyebrow">${state.role === 'employee' ? 'Your relocation' : 'Mobility workspace'}</div><div class="topbar-title">${currentLabel}</div></div><div class="topbar-actions"><button class="icon-button" aria-label="Open notifications">♢</button><button class="icon-button" aria-label="Open help">?</button><span class="avatar">${initials(user)}</span><button class="button button-quiet button-small" data-logout onclick="window.logoutRelo()">Sign out</button></div></header>
       <section class="content">${state.role === 'employee' ? renderEmployee() : renderHr()} </section>
     </main>
+    <nav class="mobile-nav" aria-label="Mobile navigation">
+      ${navItems().slice(0, 5).map(([id, icon, label]) => `<button class="mobile-nav-item ${state.view === id ? 'active' : ''}" data-nav="${id}"><span>${icon}</span><small>${label}</small></button>`).join('')}
+    </nav>
     ${renderModal()}
     ${state.toast ? `<div class="toast" role="status">${escapeHtml(state.toast)}</div>` : ''}
   `;
@@ -133,10 +137,10 @@ function renderEmployee() {
 function renderEmployeeHome() {
   const pct = progress();
   return `
-    <div class="page-heading"><div><div class="eyebrow">Bangalore · move in 18 days</div><h1>Make the new city feel a little more yours.</h1></div><p>Your company has given you one place to get ready. Start with the next useful thing, and we’ll keep the rest close.</p></div>
+    <div class="page-heading home-heading"><div><div class="eyebrow">Bangalore · move in 18 days</div><h1>One clear line from here to home.</h1></div><p>Your company has given you one place to get ready. Start with the next useful thing, and we’ll keep the rest close.</p></div>
     <div class="dashboard-grid">
       <div class="stack">
-        <section class="panel progress-panel panel-pad"><div class="eyebrow">Your relocation at a glance</div><h2>You’re further along than it feels.</h2><div class="progress-meta"><div><div class="progress-number">${pct}%</div><div class="progress-label">of your important steps are ready</div></div><a class="button button-primary button-small" href="#" data-nav="checklist">Open checklist</a></div><div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div><div class="progress-footer"><span>${state.checklist.filter((item) => item.done).length} of ${state.checklist.length} steps complete</span><span>Policy: Relo starter programme</span></div></section>
+        <section class="panel progress-panel panel-pad journey-panel"><div class="journey-panel-top"><div><div class="eyebrow">Your relocation at a glance</div><h2>You’re further along than it feels.</h2></div><div class="journey-date"><strong>12</strong><span>Oct<br>move day</span></div></div><div class="journey-path"><span class="journey-node complete">✓</span><span class="journey-segment complete"></span><span class="journey-node complete">✓</span><span class="journey-segment"></span><span class="journey-node">3</span><span class="journey-segment"></span><span class="journey-node">4</span></div><div class="journey-labels"><span>Plan</span><span>Prepare</span><span>Settle</span><span>Arrive</span></div><div class="progress-meta"><div><div class="progress-number">${pct}%</div><div class="progress-label">of your important steps are ready</div></div><a class="button button-primary button-small" href="#" data-nav="checklist">Open checklist</a></div><div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div><div class="progress-footer"><span>${state.checklist.filter((item) => item.done).length} of ${state.checklist.length} steps complete</span><span>Relo starter programme</span></div></section>
         <section class="next-action"><div><div class="eyebrow">Next best action</div><h3>Compare a few housing options</h3><p>We’ll use your saved options to make the first conversation easier.</p></div><button class="button button-dark" data-nav="explore">Continue</button></section>
         <section class="panel panel-pad"><div class="panel-heading"><div><h2>Recommended for you</h2><p>Based on your office area and commute preference.</p></div><button class="text-link" data-nav="explore">Explore all</button></div><div class="recommendations">${recommendationCards()}</div></section>
       </div>
@@ -189,7 +193,7 @@ function renderHr() {
 }
 
 function renderHrDashboard() {
-  return `<div class="page-heading"><div><div class="eyebrow">Mobility programme · Q4</div><h1>A clearer view of every move.</h1></div><div><p>See where people are progressing, where support is needed, and what your team can stop answering by email.</p><button class="button button-primary" data-open-invite>Invite an employee</button></div></div><div class="stat-row"><div class="stat"><strong>42</strong><span>Active relocations</span><span class="trend">↑ 8% this month</span></div><div class="stat"><strong>8</strong><span>Invitations pending</span><span class="trend">3 need a nudge</span></div><div class="stat"><strong>71%</strong><span>Average progress</span><span class="trend">↑ 4 pts this month</span></div></div>${renderAarrr()}<div class="dashboard-grid" style="margin-top:22px"><section class="panel panel-pad"><div class="panel-heading"><div><h2>Recent employees</h2><p>Operational view · private notes stay private</p></div><button class="text-link" data-nav="employees">View all employees</button></div>${employeeTable()}</section><aside class="stack"><section class="panel panel-pad"><div class="panel-heading"><div><h3>Needs attention</h3><p>Small interventions, earlier.</p></div></div><div class="attention-list"><div class="attention"><span class="attention-mark"></span><div><strong>3 invitations are still unopened</strong><p>Send a gentle reminder before their start date.</p></div></div><div class="attention"><span class="attention-mark"></span><div><strong>5 requests await acknowledgement</strong><p>Example Movers and four others need a response.</p></div></div></div></section><section class="panel panel-pad"><div class="panel-heading"><div><h3>Programme pulse</h3><p>Relo starter programme</p></div></div><div class="progress-track"><div class="progress-fill" style="width:71%; background:var(--mint-deep)"></div></div><div class="progress-footer" style="color:var(--ink-soft)"><span>71% complete</span><span>42 cases</span></div></section></aside></div>`;
+  return `<div class="page-heading hr-heading"><div><div class="eyebrow">Mobility programme · Q4</div><h1>See the whole programme, at a glance.</h1></div><div><p>Understand who is moving, where support is needed, and which moments are creating momentum.</p><button class="button button-primary" data-open-invite>Invite an employee <span class="button-arrow">↗</span></button></div></div><div class="stat-row"><div class="stat"><strong>42</strong><span>Active relocations</span><span class="trend">↑ 8% this month</span></div><div class="stat"><strong>8</strong><span>Invitations pending</span><span class="trend">3 need a nudge</span></div><div class="stat"><strong>71%</strong><span>Average progress</span><span class="trend">↑ 4 pts this month</span></div></div>${renderAarrr()}<div class="dashboard-grid" style="margin-top:22px"><section class="panel panel-pad"><div class="panel-heading"><div><h2>Recent employees</h2><p>Operational view · private notes stay private</p></div><button class="text-link" data-nav="employees">View all employees</button></div>${employeeTable()}</section><aside class="stack"><section class="panel panel-pad"><div class="panel-heading"><div><h3>Needs attention</h3><p>Small interventions, earlier.</p></div></div><div class="attention-list"><div class="attention"><span class="attention-mark"></span><div><strong>3 invitations are still unopened</strong><p>Send a gentle reminder before their start date.</p></div></div><div class="attention"><span class="attention-mark"></span><div><strong>5 requests await acknowledgement</strong><p>Example Movers and four others need a response.</p></div></div></div></section><section class="panel panel-pad"><div class="panel-heading"><div><h3>Programme pulse</h3><p>Relo starter programme</p></div></div><div class="progress-track"><div class="progress-fill" style="width:71%; background:var(--mint-deep)"></div></div><div class="progress-footer" style="color:var(--ink-soft)"><span>71% complete</span><span>42 cases</span></div></section></aside></div>`;
 }
 
 const defaultAarrr = {
