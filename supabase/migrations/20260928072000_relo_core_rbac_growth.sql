@@ -58,8 +58,6 @@ create policy "users can create an organization for themselves" on public.organi
 with check ((select auth.uid()) = created_by);
 create policy "users can view their own profile" on public.profiles for select to authenticated
 using ((select auth.uid()) = id);
-create policy "users can update their own profile fields" on public.profiles for update to authenticated
-using ((select auth.uid()) = id) with check ((select auth.uid()) = id);
 create policy "employees can view their own relocation case" on public.relocation_cases for select to authenticated
 using (employee_id = (select auth.uid()) or exists (select 1 from public.profiles actor where actor.id = (select auth.uid()) and actor.organization_id = relocation_cases.organization_id and actor.role in ('hr', 'admin')));
 create policy "employees can create their own growth events" on public.growth_events for insert to authenticated
