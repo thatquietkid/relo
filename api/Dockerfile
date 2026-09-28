@@ -10,8 +10,8 @@ COPY worker/package.json worker/package.json
 RUN npm ci
 
 COPY packages packages
-COPY worker worker
-RUN npm run build --workspace worker
+COPY api api
+RUN npm run build --workspace api
 
 FROM node:22-alpine
 
@@ -19,9 +19,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/packages ./packages
-COPY --from=build /app/worker/package.json ./worker/package.json
-COPY --from=build /app/worker/dist ./worker/dist
+COPY --from=build /app/api/dist ./api/dist
 
 USER node
-CMD ["node", "worker/dist/main.js"]
+EXPOSE 10000
+CMD ["node", "api/dist/server.js"]

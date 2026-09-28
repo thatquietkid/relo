@@ -12,14 +12,14 @@ services:
       - key: NODE_ENV
         value: production
       - key: VITE_RELO_API_URL
-        value: https://relo-backend-7rui.onrender.com
+        value: https://relo-api.onrender.com
 
   - type: web
-    name: relo-backend
+    name: relo-api
     runtime: docker
     region: singapore
     plan: free
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: ./api/Dockerfile
     dockerContext: .
     healthCheckPath: /healthz
     autoDeployTrigger: commit

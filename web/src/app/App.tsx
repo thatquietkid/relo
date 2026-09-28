@@ -11,27 +11,28 @@ const OAuthConsentPage = lazy(() => import('../pages/oauth/OAuthConsentPage'));
 
 function RouteLoading() { return <div className="route-state" role="status">Loading Relo</div>; }
 
+export const protectedRouteMetadata = [
+  { prefix: '/hr', permission: 'hr:read' },
+  { prefix: '/review', permission: 'reviewer:read' },
+  { prefix: '/admin/health', permission: 'platform:health:read' },
+  { prefix: '/admin/tenants', permission: 'platform:tenants:manage' },
+  { prefix: '/admin/settings', permission: 'platform:feature-flags:manage' },
+  { prefix: '/admin/users', permission: 'tenant-admin:write' },
+  { prefix: '/admin', permission: 'tenant-admin:read' },
+] as const;
+
+export function permissionForPath(pathname: string): string {
+  const route = protectedRouteMetadata.find(({ prefix }) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  return route?.permission || 'employee:read';
+}
+
 function ProtectedWorkspace() {
   const location = useLocation();
   const [path, setPath] = useState(location.pathname);
   useEffect(() => {
     if (path !== location.pathname) setPath(location.pathname);
   }, [location.pathname, path]);
-  const permission = path.startsWith('/hr')
-    ? 'hr:read'
-    : path.startsWith('/review')
-      ? 'reviewer:read'
-      : path === '/admin/health'
-        ? 'platform:health:read'
-        : path === '/admin/tenants'
-          ? 'platform:tenants:manage'
-          : path === '/admin/users'
-            ? 'platform:roles:manage'
-            : path === '/admin/settings'
-              ? 'platform:feature-flags:manage'
-              : path.startsWith('/admin')
-                ? 'platform:audit:read'
-                : 'employee:read';
+  const permission = permissionForPath(path);
   return <ProtectedRoute permission={permission}><AppShell><div className="page-content"><div className="page-heading"><p className="eyebrow">Protected workspace</p><h1>{path === '/' ? 'Your relocation workspace.' : path.slice(1).replaceAll('/', ' · ')}</h1><p>This route is ready for its domain module. Access is guarded by your active Relo membership.</p></div><section className="panel"><h2>Next step</h2><p>Protected data requests begin only after the auth boundary has resolved.</p></section></div></AppShell></ProtectedRoute>;
 }
 

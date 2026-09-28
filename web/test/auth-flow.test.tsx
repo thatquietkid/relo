@@ -12,6 +12,7 @@ import { OAuthConsentPage } from '../src/pages/oauth/OAuthConsentPage';
 import { AppShell } from '../src/app/routes';
 import { InviteAcceptPage } from '../src/pages/auth/InviteAcceptPage';
 import { AuthCallbackPage } from '../src/pages/auth/AuthCallbackPage';
+import { permissionForPath } from '../src/app/App';
 
 const authClient = vi.hoisted(() => ({
   requestOtp: vi.fn().mockResolvedValue({ accepted: true }),
@@ -243,11 +244,42 @@ describe('authenticated web shell', () => {
     cleanup();
     authClient.getCurrentIdentity.mockResolvedValue({
       ...employeeIdentity,
+      memberships: [{ ...employeeIdentity.memberships[0], roles: [{ id: 'role-admin', key: 'admin' }] }],
+    });
+    renderWithAuth(<ProtectedRoute permission="platform:health:read"><div>platform health</div></ProtectedRoute>);
+    expect(await screen.findByRole('heading', { name: /access not available/i })).toBeInTheDocument();
+    cleanup();
+    authClient.getCurrentIdentity.mockResolvedValue({
+      ...employeeIdentity,
       platformAuthorization: { scope: 'platform', roles: ['platform_admin'], permissions: ['platform:health:read'] },
       memberships: [],
     });
     renderWithAuth(<ProtectedRoute permission="platform:health:read"><div>platform health</div></ProtectedRoute>);
     expect(await screen.findByText('platform health')).toBeInTheDocument();
+  });
+
+  it('keeps tenant-admin navigation reachable while reserving platform screens', async () => {
+    sessionStorage.setItem('relo.session', JSON.stringify({ accessToken: 'access-token' }));
+    authClient.getCurrentIdentity.mockResolvedValue({
+      ...employeeIdentity,
+      memberships: [{ ...employeeIdentity.memberships[0], roles: [{ id: 'role-admin', key: 'admin' }] }],
+    });
+
+    renderWithAuth(<AppShell />);
+
+    const navigation = await screen.findByRole('navigation', { name: /primary navigation/i });
+    expect(within(navigation).getByRole('link', { name: /events/i })).toHaveAttribute('href', '/admin');
+    expect(within(navigation).getByRole('link', { name: /users/i })).toHaveAttribute('href', '/admin/users');
+    expect(within(navigation).queryByRole('link', { name: /health/i })).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole('link', { name: /tenants/i })).not.toBeInTheDocument();
+  });
+
+  it('maps tenant-admin and platform route metadata to distinct API permissions', () => {
+    expect(permissionForPath('/admin')).toBe('tenant-admin:read');
+    expect(permissionForPath('/admin/users')).toBe('tenant-admin:write');
+    expect(permissionForPath('/admin/health')).toBe('platform:health:read');
+    expect(permissionForPath('/admin/tenants')).toBe('platform:tenants:manage');
+    expect(permissionForPath('/admin/settings')).toBe('platform:feature-flags:manage');
   });
 
   it('provides keyboard-focusable mobile navigation with reduced-motion tokens', async () => {

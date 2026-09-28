@@ -6,7 +6,7 @@ const navByRole: Record<string, Array<[string, string, string]>> = {
   employee: [['/', '⌂', 'Home'], ['/checklist', '✓', 'Checklist'], ['/explore', '⌖', 'Explore'], ['/requests', '↗', 'Requests'], ['/profile', '◌', 'Profile']],
   hr: [['/hr', '▦', 'Overview'], ['/hr/employees', '♙', 'Employees'], ['/hr/programs', '✓', 'Programs'], ['/hr/requests', '↗', 'Requests'], ['/hr/settings', '⚙', 'Settings']],
   reviewer: [['/review', '✦', 'Review'], ['/review/directory', '⌖', 'Directory'], ['/review/audit', '▤', 'Audit'], ['/review/settings', '⚙', 'Settings']],
-  admin: [['/admin', '◈', 'Events'], ['/admin/tenants', '⌂', 'Tenants'], ['/admin/users', '♙', 'Users'], ['/admin/health', '♡', 'Health'], ['/admin/settings', '⚙', 'Settings']],
+  admin: [['/admin', '◈', 'Events'], ['/admin/users', '♙', 'Users']],
   platform_admin: [['/admin', '◈', 'Events'], ['/admin/tenants', '⌂', 'Tenants'], ['/admin/users', '♙', 'Users'], ['/admin/health', '♡', 'Health'], ['/admin/settings', '⚙', 'Settings']],
 };
 
