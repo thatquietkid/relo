@@ -8,11 +8,16 @@ import { MAX_BODY_SIZE, sendError } from './shared/http.js';
 import { registerAuthRoutes, type AuthRouteDependencies } from './identity/auth-routes.js';
 import { registerOAuthRoutes, type OAuthRouteDependencies } from './oauth/routes.js';
 import { registerEmployeeRoutes, type EmployeeRouteDependencies } from './employee/routes.js';
+import { createSupabaseEmployeeRepositoryFromEnv } from './employee/supabase-repository.js';
 import './authorization/policy.js';
 
 export interface AppDependencies extends AuthRouteDependencies, OAuthRouteDependencies, EmployeeRouteDependencies {}
 
 export function createApp(options: FastifyServerOptions = {}, dependencies: AppDependencies = {}): FastifyInstance {
+  const resolvedDependencies: AppDependencies = {
+    ...dependencies,
+    createEmployeeRepository: dependencies.createEmployeeRepository ?? createSupabaseEmployeeRepositoryFromEnv,
+  };
   const app = Fastify({
     ...options,
     bodyLimit: Math.min(options.bodyLimit ?? MAX_BODY_SIZE, MAX_BODY_SIZE),
@@ -28,9 +33,9 @@ export function createApp(options: FastifyServerOptions = {}, dependencies: AppD
 
   app.get('/healthz', async () => ({ status: 'ok' }));
 
-  registerAuthRoutes(app, dependencies);
-  registerOAuthRoutes(app, dependencies);
-  registerEmployeeRoutes(app, dependencies);
+  registerAuthRoutes(app, resolvedDependencies);
+  registerOAuthRoutes(app, resolvedDependencies);
+  registerEmployeeRoutes(app, resolvedDependencies);
 
   app.setNotFoundHandler((request, reply) => {
     const error = new ApiError(404, 'NOT_FOUND', 'The requested resource was not found.');
