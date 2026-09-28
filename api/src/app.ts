@@ -11,10 +11,11 @@ import { registerEmployeeRoutes, type EmployeeRouteDependencies } from './employ
 import { createSupabaseEmployeeRepositoryFromEnv } from './employee/supabase-repository.js';
 import { registerDirectoryRoutes, type DirectoryRouteDependencies } from './directory/routes.js';
 import { registerProviderRequestRoutes, type ProviderRequestRouteDependencies } from './requests/routes.js';
+import { registerNotificationRoutes, type NotificationRouteDependencies } from './notifications/routes.js';
 import { loadConfig, type ApiConfig } from './shared/config.js';
 import './authorization/policy.js';
 
-export interface AppDependencies extends AuthRouteDependencies, OAuthRouteDependencies, EmployeeRouteDependencies, DirectoryRouteDependencies, ProviderRequestRouteDependencies {}
+export interface AppDependencies extends AuthRouteDependencies, OAuthRouteDependencies, EmployeeRouteDependencies, DirectoryRouteDependencies, ProviderRequestRouteDependencies, NotificationRouteDependencies {}
 
 export function createApp(
   options: FastifyServerOptions = {},
@@ -59,6 +60,7 @@ export function createApp(
   registerEmployeeRoutes(app, resolvedDependencies);
   registerDirectoryRoutes(app, resolvedDependencies);
   registerProviderRequestRoutes(app, resolvedDependencies);
+  registerNotificationRoutes(app, resolvedDependencies);
 
   app.setNotFoundHandler((request, reply) => {
     const error = new ApiError(404, 'NOT_FOUND', 'The requested resource was not found.');
