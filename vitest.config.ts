@@ -6,7 +6,7 @@ export default defineConfig({
       'api/test/**/*.test.ts',
       'worker/test/**/*.test.ts',
       'packages/**/test/**/*.test.ts',
-      'web/test/**/*.test.ts',
+      'web/test/**/*.test.{ts,tsx}',
     ],
   },
 });

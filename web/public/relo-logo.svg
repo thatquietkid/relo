@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Relo</title>
+  <desc id="desc">Relo rounded mark</desc>
+  <path fill="#F3B841" d="M32 3C48.016 3 61 15.984 61 32S48.016 61 32 61 3 48.016 3 32 15.984 3 32 3Z"/>
+  <path fill="#12333C" d="M22 19h12.3c7.2 0 11.7 3.8 11.7 9.6 0 4-2.3 7-6.2 8.4L46 45h-8.2l-5.1-7.9h-3.5V45H22V19Zm7.2 5.9v6.5h4.4c3.2 0 4.9-1.1 4.9-3.2 0-2.2-1.7-3.3-4.9-3.3h-4.4Z"/>
+</svg>
