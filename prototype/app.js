@@ -114,7 +114,7 @@ function renderShell() {
   const user = state.auth.user;
   app.innerHTML = `
     <aside class="sidebar">
-      <div class="brand"><span class="brand-mark">r</span><span class="brand-name">relo</span></div>
+      <a class="brand dashboard-brand" href="/" aria-label="Relo dashboard home"><span class="brand-mark">r</span><span class="brand-name">relo</span></a>
       <div class="role-badge">${state.role === 'employee' ? 'Employee workspace' : state.role === 'admin' ? 'Admin workspace' : 'HR workspace'}</div>
       <div class="nav-label">Workspace</div>
       <nav class="nav-list" aria-label="Primary navigation">
