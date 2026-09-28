@@ -12,7 +12,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: RELO_API_URL
-        value: https://relo-backend.onrender.com
+        value: https://relo-backend-7rui.onrender.com
 
   - type: web
     name: relo-backend
