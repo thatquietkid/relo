@@ -116,3 +116,77 @@ export const approveOAuth = (authorizationId: string, accessToken: string) => re
 export const denyOAuth = (authorizationId: string, accessToken: string) => request<{ redirectUrl: string }>('/api/v1/oauth/deny', {
   method: 'POST', body: JSON.stringify({ authorizationId }),
 }, accessToken);
+
+export interface EmployeeCase {
+  id: string;
+  destination_city_id: string;
+  move_date: string;
+  status: string;
+  progress_percent: number;
+}
+
+export interface ChecklistItem {
+  id: string;
+  title: string;
+  description: string | null;
+  state: 'pending' | 'in_progress' | 'completed' | 'skipped';
+  due_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface DirectoryEntry {
+  id: string;
+  cityId?: string;
+  cityName: string;
+  category: string;
+  providerName: string;
+  providerSummary: string;
+  title: string;
+  description: string;
+  sourceUrl?: string | null;
+}
+
+export interface NotificationView {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  readAt: string | null;
+  deliveryStatus: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PreferencesView {
+  timezone: string;
+  channels: { email: boolean; inApp: boolean; push: boolean };
+  privacy: { shareContact: boolean };
+  updatedAt: string;
+}
+
+export const getEmployeeCase = (accessToken: string) => request<{ relocation: EmployeeCase }>('/api/v1/me/relocation', {}, accessToken);
+export const getEmployeeChecklist = (accessToken: string) => request<{ checklist: ChecklistItem[] }>('/api/v1/me/relocation/checklist', {}, accessToken);
+export const updateChecklistItem = (accessToken: string, itemId: string, state: ChecklistItem['state'], idempotencyKey: string) => request<{ checklist_item: ChecklistItem }>(`/api/v1/me/relocation/checklist/${encodeURIComponent(itemId)}`, { method: 'PATCH', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify({ state }) }, accessToken);
+
+export const getDirectory = (accessToken: string, filters: { cityId: string; query?: string; category?: string; page?: number; pageSize?: number }) => {
+  const params = new URLSearchParams({ cityId: filters.cityId, page: String(filters.page ?? 1), pageSize: String(filters.pageSize ?? 20) });
+  if (filters.query) params.set('query', filters.query);
+  if (filters.category) params.set('category', filters.category);
+  return request<{ items: DirectoryEntry[]; page: number; pageSize: number; total: number; totalPages: number }>(`/api/v1/directory?${params}`, {}, accessToken);
+};
+export const getShortlist = (accessToken: string) => request<{ shortlist: Array<{ id: string; directoryEntryId: string; entry: DirectoryEntry }> }>('/api/v1/me/shortlist', {}, accessToken);
+export const saveShortlist = (accessToken: string, entryId: string) => request<{ shortlist: unknown }>('/api/v1/me/shortlist', { method: 'POST', body: JSON.stringify({ entryId }) }, accessToken);
+export const removeShortlist = (accessToken: string, entryId: string) => request<void>(`/api/v1/me/shortlist/${encodeURIComponent(entryId)}`, { method: 'DELETE' }, accessToken);
+
+export interface RequestConsentField { field: string; label: string; value: string; required: true }
+export interface ProviderRequestPreview { entry: DirectoryEntry; destination: { cityId: string; cityName: string; moveDate: string }; fields: RequestConsentField[] }
+export interface ProviderRequest { id: string; entryId: string; status: string; submittedAt: string | null; withdrawnAt: string | null; entry: DirectoryEntry }
+export const getProviderRequestPreview = (accessToken: string, entryId: string) => request<{ preview: ProviderRequestPreview }>('/api/v1/me/provider-requests/preview', { method: 'POST', body: JSON.stringify({ entryId }) }, accessToken);
+export const submitProviderRequest = (accessToken: string, input: { entryId: string; consents: Array<{ field: string; consented: boolean }> }, idempotencyKey: string) => request<{ request: ProviderRequest }>('/api/v1/me/provider-requests', { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(input) }, accessToken);
+export const getProviderRequests = (accessToken: string) => request<{ requests: ProviderRequest[] }>('/api/v1/me/provider-requests', {}, accessToken);
+export const withdrawProviderRequest = (accessToken: string, requestId: string) => request<{ request: ProviderRequest }>(`/api/v1/me/provider-requests/${encodeURIComponent(requestId)}/withdraw`, { method: 'POST' }, accessToken);
+
+export const getNotifications = (accessToken: string) => request<{ items: NotificationView[]; unreadCount: number; page: number; pageSize: number; total: number; totalPages: number }>('/api/v1/me/notifications?page=1&pageSize=20', {}, accessToken);
+export const markNotificationRead = (accessToken: string, notificationId: string) => request<void>(`/api/v1/me/notifications/${encodeURIComponent(notificationId)}/read`, { method: 'POST' }, accessToken);
+export const getPreferences = (accessToken: string) => request<{ preferences: PreferencesView }>('/api/v1/me/preferences', {}, accessToken);
+export const updatePreferences = (accessToken: string, patch: { timezone?: string; email?: boolean; inApp?: boolean; push?: boolean; shareContact?: boolean }) => request<{ preferences: PreferencesView }>('/api/v1/me/preferences', { method: 'PATCH', body: JSON.stringify(patch) }, accessToken);

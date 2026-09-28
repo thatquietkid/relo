@@ -1,0 +1,3 @@
+export function ProgressCard({ progress, destination, moveDate }: { progress: number; destination?: string; moveDate?: string }) {
+  return <section className="progress-card" aria-label="Relocation progress"><div className="progress-card-copy"><p className="eyebrow">Your move</p><h2>{progress}% arranged</h2><p>{destination ? `Preparing for ${destination}.` : 'Your relocation plan is taking shape.'}</p></div><div className="progress-ring" aria-label={`${progress} percent complete`}><strong>{progress}</strong><span>%</span></div><div className="progress-bar" aria-hidden="true"><span style={{ width: `${Math.max(0, Math.min(progress, 100))}%` }} /></div>{moveDate && <p className="progress-date">Move date <strong>{moveDate}</strong></p>}</section>;
+}

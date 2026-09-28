@@ -10,7 +10,7 @@ const navByRole: Record<string, Array<[string, string, string]>> = {
   platform_admin: [['/admin/tenants', '⌂', 'Tenants'], ['/admin/health', '♡', 'Health'], ['/admin/settings', '⚙', 'Settings']],
 };
 
-function resolvedRole(identity: ReturnType<typeof useAuth>['identity']): string {
+export function resolvedRole(identity: ReturnType<typeof useAuth>['identity']): string {
   if (identity?.platformAuthorization?.scope === 'platform'
     && identity.platformAuthorization.roles.includes('platform_admin')) return 'platform_admin';
   return identity?.memberships[0]?.roles[0]?.key || 'employee';

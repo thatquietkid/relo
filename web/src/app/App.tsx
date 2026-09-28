@@ -1,8 +1,16 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthProvider';
-import { AppShell, PublicPage } from './routes';
+import { AppShell, PublicPage, resolvedRole } from './routes';
 import { ProtectedRoute } from '../components/ProtectedRoute';
+import { useAuth } from './auth/AuthProvider';
+import { EmployeeHomePage } from '../pages/employee/EmployeeHomePage';
+import { ChecklistPage } from '../pages/employee/ChecklistPage';
+import { ExplorePage } from '../pages/employee/ExplorePage';
+import { SavedPage } from '../pages/employee/SavedPage';
+import { RequestsPage } from '../pages/employee/RequestsPage';
+import { ProfilePage } from '../pages/employee/ProfilePage';
+import { SettingsPage } from '../pages/employee/SettingsPage';
 
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
 const AuthCallbackPage = lazy(() => import('../pages/auth/AuthCallbackPage'));
@@ -28,12 +36,22 @@ export function permissionForPath(pathname: string): string {
 
 function ProtectedWorkspace() {
   const location = useLocation();
+  const { identity } = useAuth();
   const [path, setPath] = useState(location.pathname);
   useEffect(() => {
     if (path !== location.pathname) setPath(location.pathname);
   }, [location.pathname, path]);
   const permission = permissionForPath(path);
-  return <ProtectedRoute permission={permission}><AppShell><div className="page-content"><div className="page-heading"><p className="eyebrow">Protected workspace</p><h1>{path === '/' ? 'Your relocation workspace.' : path.slice(1).replaceAll('/', ' · ')}</h1><p>This route is ready for its domain module. Access is guarded by your active Relo membership.</p></div><section className="panel"><h2>Next step</h2><p>Protected data requests begin only after the auth boundary has resolved.</p></section></div></AppShell></ProtectedRoute>;
+  const employee = resolvedRole(identity) === 'employee';
+  const employeePage = path === '/' ? <EmployeeHomePage />
+    : path === '/checklist' ? <ChecklistPage />
+      : path === '/explore' ? <ExplorePage />
+        : path === '/saved' ? <SavedPage />
+          : path === '/requests' ? <RequestsPage />
+            : path === '/profile' ? <ProfilePage />
+              : path === '/settings' ? <SettingsPage />
+                : null;
+  return <ProtectedRoute permission={permission}><AppShell>{employee && employeePage ? employeePage : <div className="page-content"><div className="page-heading"><p className="eyebrow">Protected workspace</p><h1>{path === '/' ? 'Your relocation workspace.' : path.slice(1).replaceAll('/', ' · ')}</h1><p>This route is ready for its domain module. Access is guarded by your active Relo membership.</p></div><section className="panel"><h2>Next step</h2><p>Protected data requests begin only after the auth boundary has resolved.</p></section></div>}</AppShell></ProtectedRoute>;
 }
 
 function AppRoutes() {

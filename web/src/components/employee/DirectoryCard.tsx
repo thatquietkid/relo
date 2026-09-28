@@ -1,0 +1,5 @@
+import type { DirectoryEntry } from '../../app/auth/auth-client';
+
+export function DirectoryCard({ entry, saved = false, onSave, onRequest }: { entry: DirectoryEntry; saved?: boolean; onSave?: () => void; onRequest?: () => void }) {
+  return <article className="directory-card"><div className="directory-card-top"><span className="category-pill">{entry.category}</span>{onSave && <button className="icon-button" type="button" aria-label={`${saved ? 'Remove' : 'Save'} ${entry.title}`} onClick={onSave}>{saved ? '★' : '☆'}</button>}</div><h3>{entry.title}</h3><p>{entry.description}</p><div className="directory-provider"><span className="avatar avatar-small">{entry.providerName.slice(0, 1)}</span><span><strong>{entry.providerName}</strong><small>{entry.cityName}</small></span></div><div className="directory-actions">{onRequest && <button className="button button-primary button-small" type="button" onClick={onRequest}>Request support</button>}{entry.sourceUrl && <a className="text-button" href={entry.sourceUrl} target="_blank" rel="noreferrer">View guide</a>}</div></article>;
+}
