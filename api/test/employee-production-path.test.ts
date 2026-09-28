@@ -64,5 +64,8 @@ describe('production employee data path', () => {
     expect(migration).toContain("security definer\nset search_path = ''");
     expect(migration).not.toContain('set search_path = public, extensions, pg_catalog');
     expect(migration).toContain('revoke all on table public.outbox_events from public, anon, authenticated;');
+    expect(migration).toContain("'Collect documents'");
+    expect(migration).toContain("r.key = 'employee'");
+    expect(migration).not.toContain('jsonb_to_recordset(coalesce(p_defaults');
   });
 });

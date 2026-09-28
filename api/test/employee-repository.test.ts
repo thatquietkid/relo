@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { makeSupabaseEmployeeRepository } from '../src/employee/supabase-repository.js';
-import type { AtomicChecklistMutationInput } from '../src/employee/checklist-service.js';
+import type { ActivateCaseInput, AtomicChecklistMutationInput } from '../src/employee/checklist-service.js';
 
 const checklistItem = {
   id: 'item-a',
@@ -17,6 +17,38 @@ const checklistItem = {
 };
 
 describe('Supabase employee repository', () => {
+  it('keeps the activation RPC contract compatible while forwarding server defaults', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: {
+        relocation_case: {
+          id: 'case-a', tenant_id: 'tenant-a', employee_user_id: 'employee-a', destination_city_id: 'city-a',
+          move_date: '2026-10-15', status: 'active', progress_percent: 0,
+          created_at: '2026-09-28T00:00:00.000Z', updated_at: '2026-09-28T12:00:00.000Z',
+        },
+        checklist: [],
+      },
+      error: null,
+    });
+    const repository = makeSupabaseEmployeeRepository({ rpc } as never);
+    const input: ActivateCaseInput = {
+      userId: 'employee-a',
+      tenantId: 'tenant-a',
+      defaults: [{ key: 'caller-supplied', title: 'Ignored by SQL policy', description: null, due_at: null, sort_order: 99 }],
+      traceId: 'request-activation',
+    };
+
+    await expect(repository.activateCase?.(input)).resolves.toMatchObject({
+      relocationCase: { id: 'case-a' },
+      checklist: [],
+    });
+    expect(rpc).toHaveBeenCalledWith('employee_activate_relocation_case', {
+      p_user_id: 'employee-a',
+      p_tenant_id: 'tenant-a',
+      p_defaults: input.defaults,
+      p_trace_id: 'request-activation',
+    });
+  });
+
   it('uses the authenticated RPC for atomic checklist mutation and maps its safe response', async () => {
     const rpc = vi.fn().mockResolvedValue({ data: { checklist_item: checklistItem }, error: null });
     const repository = makeSupabaseEmployeeRepository({ rpc } as never);

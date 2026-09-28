@@ -83,10 +83,13 @@ begin
        select 1
          from public.memberships m
          join public.tenants t on t.id = m.tenant_id and t.status = 'active'
+         join public.membership_roles mr on mr.membership_id = m.id
+         join public.roles r on r.id = mr.role_id
         where m.user_id = p_user_id
           and m.tenant_id = p_tenant_id
           and m.status = 'active'
-     ) then
+          and r.key = 'employee'
+      ) then
     raise exception using message = 'MEMBERSHIP_REQUIRED';
   end if;
 
@@ -108,15 +111,17 @@ begin
      where id = v_case.id
      returning * into v_case;
 
-    for v_item in
-      select * from jsonb_to_recordset(coalesce(p_defaults, '[]'::jsonb)) as defaults(
-        key text,
-        title text,
-        description text,
-        due_at timestamptz,
-        sort_order integer
-      )
-    loop
+     -- p_defaults remains in the signature for server adapter compatibility,
+     -- but authenticated callers cannot choose checklist content.
+     for v_item in
+       select defaults.key, defaults.title, defaults.description, defaults.due_at, defaults.sort_order
+         from (values
+           ('documents'::text, 'Collect documents'::text, 'Identity documents'::text, null::timestamptz, 1::integer),
+           ('housing'::text, 'Compare housing'::text, 'Review housing options'::text, null::timestamptz, 2::integer),
+           ('school'::text, 'Review schools'::text, 'Review schools and childcare'::text, null::timestamptz, 3::integer),
+           ('banking'::text, 'Set up banking'::text, 'Prepare local banking'::text, null::timestamptz, 4::integer)
+         ) as defaults(key, title, description, due_at, sort_order)
+     loop
       insert into public.checklist_items (case_id, key, title, description, state, due_at, completed_at, sort_order)
       values (v_case.id, v_item.key, v_item.title, v_item.description, 'pending', v_item.due_at, null, v_item.sort_order)
       on conflict (case_id, key) do nothing;
@@ -180,10 +185,13 @@ begin
        select 1
          from public.memberships m
          join public.tenants t on t.id = m.tenant_id and t.status = 'active'
+         join public.membership_roles mr on mr.membership_id = m.id
+         join public.roles r on r.id = mr.role_id
         where m.user_id = p_user_id
           and m.tenant_id = p_tenant_id
           and m.status = 'active'
-     ) then
+          and r.key = 'employee'
+      ) then
     raise exception using message = 'MEMBERSHIP_REQUIRED';
   end if;
   if p_state not in ('pending', 'in_progress', 'completed', 'skipped') then
