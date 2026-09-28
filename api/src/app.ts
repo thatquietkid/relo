@@ -18,6 +18,7 @@ import { registerReportingRoutes, type ReportingRouteDependencies } from './repo
 import { registerAdminRoutes, type AdminRouteDependencies } from './admin/routes.js';
 import { loadConfig, type ApiConfig } from './shared/config.js';
 import './authorization/policy.js';
+import { allowedOrigin, securityHeaders } from './security/cors.js';
 
 export interface AppDependencies extends AuthRouteDependencies, OAuthRouteDependencies, EmployeeRouteDependencies, DirectoryRouteDependencies, ProviderRequestRouteDependencies, NotificationRouteDependencies, HrRouteDependencies, ReviewRouteDependencies, ReportingRouteDependencies, AdminRouteDependencies {}
 
@@ -41,6 +42,18 @@ export function createApp(
 
   app.addHook('onRequest', async (request, reply) => {
     reply.header('X-Request-Id', request.id);
+    const headers = securityHeaders({ ...process.env, FRONTEND_ORIGIN: config.frontendOrigin, SUPABASE_URL: config.supabaseUrl });
+    for (const [key, value] of Object.entries(headers)) reply.header(key, value);
+    const origin = request.headers.origin;
+    if (origin && !allowedOrigin(origin, { ...process.env, FRONTEND_ORIGIN: config.frontendOrigin, SUPABASE_URL: config.supabaseUrl })) {
+      return reply.code(403).send({ error: { code: 'ORIGIN_NOT_ALLOWED', message: 'The request origin is not allowed.', requestId: request.id } });
+    }
+    if (request.method === 'OPTIONS') {
+      if (origin) reply.header('Access-Control-Allow-Origin', origin);
+      reply.header('Access-Control-Allow-Headers', 'Authorization, Content-Type, Idempotency-Key, X-Tenant-Id');
+      reply.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+      return reply.code(204).send();
+    }
   });
 
   app.get('/healthz', async () => ({ status: 'ok' }));

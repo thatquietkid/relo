@@ -1,0 +1,4 @@
+import type { OutboxEvent } from '../outbox-loop.js';
+export interface MetricProjectionStore { upsert(input: { tenantId: string | null; metricKey: string; metricDate: string; eventId: string }): Promise<void>; }
+const metricByEvent: Record<string, string> = { EmployeeInvited: 'acquisition', RelocationCaseActivated: 'activation', ChecklistItemCompleted: 'retention', ProviderRequestSubmitted: 'referral', ReferralAccepted: 'referral', ProgramActivated: 'revenue' };
+export function makeGrowthProjectionHandler({ metrics }: { metrics: MetricProjectionStore }) { return async (event: OutboxEvent): Promise<void> => { const metricKey = metricByEvent[event.type]; if (!metricKey) return; await metrics.upsert({ tenantId: event.tenantId, metricKey, metricDate: event.occurredAt.slice(0, 10), eventId: event.id }); }; }

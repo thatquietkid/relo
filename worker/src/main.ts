@@ -1,5 +1,9 @@
 import { createServer, type Server } from 'node:http';
 import { pathToFileURL } from 'node:url';
+import { randomUUID } from 'node:crypto';
+import { runOutboxLoop } from './outbox-loop.js';
+import { createSupabaseOutboxRepository } from './supabase-outbox-repository.js';
+import { createHandlers } from './handlers/index.js';
 
 export interface WorkerRuntime {
   start(): Promise<void>;
@@ -53,12 +57,20 @@ async function stopHealthServer(server: Server | undefined): Promise<void> {
 
 export function createWorker(): WorkerRuntime {
   let running = false;
+  let controller: AbortController | undefined;
+  let loop: Promise<void> | undefined;
 
   return {
     async start() {
       running = true;
+      if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        controller = new AbortController();
+        loop = runOutboxLoop(createSupabaseOutboxRepository(), createHandlers(), process.env.WORKER_ID ?? randomUUID(), controller.signal).catch(() => undefined);
+      }
     },
     async stop() {
+      controller?.abort();
+      await loop;
       running = false;
     },
     isRunning() {

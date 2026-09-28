@@ -45,3 +45,15 @@ Do not add Supabase service-role keys, SMTP credentials, OAuth client secrets, o
 5. Confirm the web service can reach the API URL and that the API `/readyz` check is green.
 
 The Docker images use multi-stage builds, omit environment files from the build context, and run application processes as non-root users. The web image enables gzip at the Nginx boundary.
+
+## Sprint deployment gate
+
+Every sprint should follow the same release sequence:
+
+1. Run `npm run typecheck`, the full Vitest suite, legacy tests, and all three workspace builds.
+2. Run `supabase db reset --local` and `supabase test db --local` against an isolated local Supabase stack.
+3. Run `git diff --check`, commit the sprint, and push the branch.
+4. Wait for all six Render services, including the duplicate services in the existing workspace, to report `live` for the new commit.
+5. Run `node scripts/verify-deployment.mjs --web https://relo-web.onrender.com --api https://relo-api.onrender.com`.
+
+The verifier checks liveness, readiness, security headers, and gzip delivery. A failed readiness check blocks the release even when the web container itself is live.

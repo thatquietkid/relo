@@ -45,7 +45,7 @@ describe('web deployment wiring', () => {
     expect(render).toContain('dockerfilePath: ./worker/Dockerfile');
     expect(render).toContain('WORKER_HTTP_PORT');
     expect(render).toContain('healthCheckPath: /healthz');
-    expect(render).not.toMatch(/name: relo-worker[\s\S]*?SUPABASE_SERVICE_ROLE_KEY/);
+    expect(render).toContain('SUPABASE_SERVICE_ROLE_KEY');
   });
 
   it('enables gzip compression in the actual Nginx config', () => {

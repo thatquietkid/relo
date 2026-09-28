@@ -52,3 +52,7 @@ services:
         value: production
       - key: WORKER_HTTP_PORT
         value: 10000
+      - key: SUPABASE_URL
+        value: https://rxmkcjjiyrteooztynsr.supabase.co
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
