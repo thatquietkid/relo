@@ -99,6 +99,46 @@ describe('auth service', () => {
     expect(supabase.auth.signInWithOAuth).not.toHaveBeenCalled();
   });
 
+  it('allows only the exact configured Google callback', async () => {
+    const supabase = fakeSupabase();
+    const auth = makeAuthService({
+      supabase,
+      frontendOrigin: 'https://relo.example.com',
+      googleRedirectAllowlist: ['https://relo.example.com/auth/callback'],
+    });
+
+    await expect(auth.getGoogleSignInUrl('https://relo.example.com/auth/callback'))
+      .resolves.toBe('https://accounts.google.com/oauth?state=1');
+    await expect(auth.getGoogleSignInUrl('https://relo.example.com/any-other-path'))
+      .rejects.toMatchObject({ code: 'REDIRECT_NOT_ALLOWED' });
+  });
+
+  it('reads the dedicated Google redirect allowlist environment setting', async () => {
+    const previous = process.env.GOOGLE_AUTH_REDIRECT_ALLOWLIST;
+    process.env.GOOGLE_AUTH_REDIRECT_ALLOWLIST = 'https://relo.example.com/login/callback';
+    try {
+      const supabase = fakeSupabase();
+      const auth = makeAuthService({ supabase, frontendOrigin: 'https://relo.example.com' });
+
+      await expect(auth.getGoogleSignInUrl('https://relo.example.com/login/callback'))
+        .resolves.toBe('https://accounts.google.com/oauth?state=1');
+      await expect(auth.getGoogleSignInUrl('https://relo.example.com/auth/callback'))
+        .rejects.toMatchObject({ code: 'REDIRECT_NOT_ALLOWED' });
+    } finally {
+      if (previous === undefined) delete process.env.GOOGLE_AUTH_REDIRECT_ALLOWLIST;
+      else process.env.GOOGLE_AUTH_REDIRECT_ALLOWLIST = previous;
+    }
+  });
+
+  it('forwards the incoming bearer token when logging out', async () => {
+    const supabase = fakeSupabase();
+    const auth = makeAuthService({ supabase });
+
+    await auth.logout('incoming-access-token');
+
+    expect(supabase.auth.signOut).toHaveBeenCalledWith('incoming-access-token');
+  });
+
   it('rejects a missing or invalid current identity session', async () => {
     const supabase = fakeSupabase({
       auth: {

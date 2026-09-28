@@ -9,8 +9,15 @@ export interface AuthorizationDetails {
   scope?: string;
 }
 
+export interface AlreadyHandledAuthorization {
+  alreadyHandled: true;
+  redirectUrl: string;
+}
+
+export type AuthorizationDetailsResult = AuthorizationDetails | AlreadyHandledAuthorization;
+
 export interface ConsentService {
-  getAuthorizationDetails(identity: IdentityContext | null, authorizationId: string): Promise<AuthorizationDetails>;
+  getAuthorizationDetails(identity: IdentityContext | null, authorizationId: string): Promise<AuthorizationDetailsResult>;
   approveAuthorization(identity: IdentityContext | null, authorizationId: string): Promise<{ redirectUrl: string }>;
   denyAuthorization(identity: IdentityContext | null, authorizationId: string): Promise<{ redirectUrl: string }>;
 }
@@ -21,6 +28,15 @@ interface ConsentServiceOptions {
 
 function requireIdentity(identity: IdentityContext | null): asserts identity is IdentityContext {
   if (!identity) throw new ApiError(401, 'AUTHENTICATION_REQUIRED', 'Authentication is required.');
+  if (identity.memberships.length === 0) {
+    throw new ApiError(403, 'MEMBERSHIP_REQUIRED', 'An active Relo membership is required.');
+  }
+  const canConsent = identity.memberships.some((membership) =>
+    membership.roles.some((role) => ['employee', 'hr', 'admin'].includes(role.key)),
+  );
+  if (!canConsent) {
+    throw new ApiError(403, 'OAUTH_CONSENT_FORBIDDEN', 'This Relo role cannot manage OAuth consent.');
+  }
 }
 
 function requireAuthorizationId(authorizationId: string): void {
@@ -31,7 +47,10 @@ function providerError(): ApiError {
   return new ApiError(400, 'OAUTH_CONSENT_ERROR', 'The OAuth authorization request is invalid or expired.');
 }
 
-function toDetails(value: Record<string, unknown> | null): AuthorizationDetails {
+function toDetails(value: Record<string, unknown> | null): AuthorizationDetailsResult {
+  if (typeof value?.redirect_url === 'string' && typeof value.authorization_id !== 'string') {
+    return { alreadyHandled: true, redirectUrl: value.redirect_url };
+  }
   const rawClient = value?.client as Record<string, unknown> | undefined;
   const clientName = typeof rawClient?.name === 'string'
     ? rawClient.name

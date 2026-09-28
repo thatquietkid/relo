@@ -4,7 +4,7 @@ create schema if not exists extensions;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth, pg_catalog;
 
-select plan(42);
+select plan(43);
 
 select has_table('public', 'tenants', 'tenants table exists');
 select has_table('public', 'memberships', 'memberships table exists');
@@ -14,6 +14,11 @@ select has_table('public', 'membership_roles', 'membership_roles table exists');
 select has_table('public', 'audit_logs', 'audit_logs table exists');
 select has_table('public', 'idempotency_keys', 'idempotency_keys table exists');
 select ok(to_regclass('public.invitation_views') is not null, 'safe invitation view exists');
+
+select ok(
+  position('INVITATION_PRIVILEGED_MEMBERSHIP_CONFLICT' in pg_get_functiondef('public.accept_invitation(uuid, text)'::regprocedure)) > 0,
+  'invitation acceptance rejects existing privileged memberships'
+);
 
 select ok((select relrowsecurity from pg_class where oid = 'public.tenants'::regclass), 'RLS enabled on tenants');
 select ok((select relrowsecurity from pg_class where oid = 'public.memberships'::regclass), 'RLS enabled on memberships');

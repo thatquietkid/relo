@@ -3,6 +3,7 @@ import { createApp } from '../src/app.js';
 import type { AuthService } from '../src/identity/auth-service.js';
 import type { InvitationService } from '../src/identity/invitation-service.js';
 import type { ConsentService } from '../src/oauth/consent-service.js';
+import type { SupabasePort } from '../src/identity/supabase.js';
 
 const identity = { user: { id: 'user-1', email: 'employee@example.com' }, memberships: [] };
 const membership = {
@@ -95,6 +96,60 @@ describe('Task 4 API routes', () => {
     });
     expect(denied.json()).toEqual({ redirectUrl: 'https://client.example/denied' });
     expect(JSON.stringify(approved.json())).not.toContain('service_role');
+
+    await app.close();
+  });
+
+  it('passes the incoming bearer token into runtime Supabase route services', async () => {
+    const authService: AuthService = {
+      requestEmailOtp: vi.fn(),
+      verifyEmailOtp: vi.fn(),
+      getGoogleSignInUrl: vi.fn(),
+      getCurrentIdentity: vi.fn().mockResolvedValue({
+        user: { id: 'user-1', email: 'employee@example.com' },
+        memberships: [membership],
+      }),
+      logout: vi.fn(),
+    };
+    const port = {
+      auth: {},
+      getActiveMemberships: vi.fn(),
+      acceptInvitation: vi.fn(),
+      getAuthorizationDetails: vi.fn().mockResolvedValue({
+        data: { authorization_id: 'auth-1', client: { name: 'Move App' }, scope: 'openid' }, error: null,
+      }),
+      approveAuthorization: vi.fn().mockResolvedValue({ data: { redirect_url: 'https://client.example/approved' }, error: null }),
+      denyAuthorization: vi.fn().mockResolvedValue({ data: { redirect_url: 'https://client.example/denied' }, error: null }),
+    } as unknown as SupabasePort;
+    const createSupabasePort = vi.fn().mockReturnValue(port);
+    const app = createApp({ logger: false }, { authService, createSupabasePort });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/oauth/authorization-details?authorization_id=auth-1',
+      headers: { authorization: 'Bearer forwarded-token' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(createSupabasePort).toHaveBeenCalledWith('forwarded-token');
+    expect(port.getAuthorizationDetails).toHaveBeenCalledWith('auth-1');
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/oauth/approve',
+      headers: { authorization: 'Bearer forwarded-token' },
+      payload: { authorizationId: 'auth-1' },
+    });
+    await app.inject({
+      method: 'POST',
+      url: '/api/v1/oauth/deny',
+      headers: { authorization: 'Bearer forwarded-token' },
+      payload: { authorizationId: 'auth-1' },
+    });
+    expect(createSupabasePort).toHaveBeenNthCalledWith(2, 'forwarded-token');
+    expect(createSupabasePort).toHaveBeenNthCalledWith(3, 'forwarded-token');
+    expect(port.approveAuthorization).toHaveBeenCalledWith('auth-1');
+    expect(port.denyAuthorization).toHaveBeenCalledWith('auth-1');
 
     await app.close();
   });

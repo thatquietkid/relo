@@ -23,6 +23,7 @@ export function makeInvitationService({ supabase }: InvitationServiceOptions): I
           'INVITATION_INVALID_TOKEN',
           'INVITATION_EXPIRED',
           'INVITATION_ALREADY_ACCEPTED',
+          'INVITATION_PRIVILEGED_MEMBERSHIP_CONFLICT',
         ]);
         const code = error && known.has(error.code ?? '')
           ? error.code!

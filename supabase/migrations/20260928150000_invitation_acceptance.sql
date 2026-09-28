@@ -35,6 +35,18 @@ begin
     raise exception using errcode = 'P0001', message = 'INVITATION_EMAIL_MISMATCH';
   end if;
 
+  if exists (
+    select 1
+      from public.memberships m
+      join public.membership_roles mr on mr.membership_id = m.id
+      join public.roles r on r.id = mr.role_id
+     where m.tenant_id = v_invitation.tenant_id
+       and m.user_id = auth.uid()
+       and r.key in ('hr', 'admin')
+  ) then
+    raise exception using errcode = 'P0001', message = 'INVITATION_PRIVILEGED_MEMBERSHIP_CONFLICT';
+  end if;
+
   insert into public.memberships (tenant_id, user_id, status)
   values (v_invitation.tenant_id, auth.uid(), 'active')
   on conflict (tenant_id, user_id) do update set status = 'active', suspended_at = null

@@ -55,6 +55,18 @@ describe('invitation service', () => {
       .rejects.toMatchObject({ code: 'INVITATION_EMAIL_MISMATCH' });
   });
 
+  it('rejects an existing privileged membership during employee invitation acceptance', async () => {
+    const service = makeInvitationService({
+      supabase: fakeSupabase({ data: null, error: {
+        code: 'P0001',
+        message: 'INVITATION_PRIVILEGED_MEMBERSHIP_CONFLICT',
+      } }),
+    });
+
+    await expect(service.acceptInvitation('user-1', 'raw-token'))
+      .rejects.toMatchObject({ code: 'INVITATION_PRIVILEGED_MEMBERSHIP_CONFLICT' });
+  });
+
   it('does not turn an upstream invitation failure into a false invalid-token result', async () => {
     const service = makeInvitationService({
       supabase: fakeSupabase({ data: null, error: { code: '42501', message: 'permission denied' } }),

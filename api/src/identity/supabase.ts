@@ -37,7 +37,7 @@ export interface SupabaseAuthPort {
       provider: 'google';
       options: { redirectTo: string };
     }): Promise<{ data: { url: string | null }; error: SupabaseError | null }>;
-    signOut(): Promise<{ error: SupabaseError | null }>;
+    signOut(accessToken: string): Promise<{ error: SupabaseError | null }>;
   };
   getActiveMemberships(userId: string): Promise<MembershipView[]>;
 }
@@ -70,6 +70,13 @@ export interface SupabaseClientConfig {
   url: string;
   publishableKey: string;
   accessToken?: string;
+}
+
+export interface SupabaseRestPortConfig {
+  url: string;
+  publishableKey: string;
+  accessToken: string;
+  fetch?: typeof globalThis.fetch;
 }
 
 export function createSupabaseClient(config: SupabaseClientConfig): SupabaseClient {
@@ -109,14 +116,74 @@ function mapMembership(row: Record<string, unknown>): MembershipView {
   };
 }
 
-export function createSupabasePort(client: SupabaseClient): SupabasePort {
+async function parseResponse(response: Response): Promise<unknown> {
+  const body = await response.text();
+  if (!body) return null;
+  try {
+    return JSON.parse(body) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function restError(response: Response, payload: unknown): SupabaseError {
+  const value = payload as Record<string, unknown> | null;
+  return {
+    code: typeof value?.code === 'string' ? value.code : String(response.status),
+    message: typeof value?.message === 'string'
+      ? value.message
+      : typeof value?.msg === 'string'
+        ? value.msg
+        : `Supabase Auth request failed with status ${response.status}.`,
+    status: response.status,
+  };
+}
+
+function makeAuthRestRequest(config: SupabaseRestPortConfig) {
+  const fetcher = config.fetch ?? globalThis.fetch.bind(globalThis);
+  const authUrl = `${new URL('auth/v1', config.url).href.replace(/\/$/, '')}`;
+
+  return async function request(path: string, method: 'GET' | 'POST', body?: Record<string, unknown>) {
+    const response = await fetcher(`${authUrl}/${path}`, {
+      method,
+      headers: {
+        apikey: config.publishableKey,
+        Authorization: `Bearer ${config.accessToken}`,
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    const payload = await parseResponse(response);
+    return response.ok
+      ? { data: payload, error: null as SupabaseError | null }
+      : { data: null, error: restError(response, payload) };
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function asRedirect(value: unknown): { redirect_url?: string | null } | null {
+  const record = asRecord(value);
+  return record ? { redirect_url: typeof record.redirect_url === 'string' ? record.redirect_url : null } : null;
+}
+
+export function createSupabasePort(client: SupabaseClient, restConfig?: SupabaseRestPortConfig): SupabasePort {
+  const request = restConfig ? makeAuthRestRequest(restConfig) : null;
   return {
     auth: {
       signInWithOtp: (input) => client.auth.signInWithOtp(input),
       verifyOtp: (input) => client.auth.verifyOtp(input),
       getUser: (accessToken) => client.auth.getUser(accessToken),
       signInWithOAuth: (input) => client.auth.signInWithOAuth(input),
-      signOut: () => client.auth.signOut(),
+      signOut: async (accessToken) => {
+        if (!request) return { error: { code: 'AUTH_PROVIDER_NOT_CONFIGURED', message: 'Supabase Auth is not configured.' } };
+        const result = await request('logout?scope=local', 'POST');
+        return { error: result.error };
+      },
     },
     async getActiveMemberships(userId) {
       const { data, error } = await client
@@ -138,13 +205,19 @@ export function createSupabasePort(client: SupabaseClient): SupabasePort {
       };
     },
     async getAuthorizationDetails(authorizationId) {
-      return client.auth.oauth.getAuthorizationDetails(authorizationId);
+      if (!request) return { data: null, error: { code: 'AUTH_PROVIDER_NOT_CONFIGURED', message: 'Supabase Auth is not configured.' } };
+      const result = await request(`oauth/authorizations/${encodeURIComponent(authorizationId)}`, 'GET');
+      return { data: asRecord(result.data), error: result.error };
     },
     async approveAuthorization(authorizationId) {
-      return client.auth.oauth.approveAuthorization(authorizationId);
+      if (!request) return { data: null, error: { code: 'AUTH_PROVIDER_NOT_CONFIGURED', message: 'Supabase Auth is not configured.' } };
+      const result = await request(`oauth/authorizations/${encodeURIComponent(authorizationId)}/consent`, 'POST', { action: 'approve' });
+      return { data: asRedirect(result.data), error: result.error };
     },
     async denyAuthorization(authorizationId) {
-      return client.auth.oauth.denyAuthorization(authorizationId);
+      if (!request) return { data: null, error: { code: 'AUTH_PROVIDER_NOT_CONFIGURED', message: 'Supabase Auth is not configured.' } };
+      const result = await request(`oauth/authorizations/${encodeURIComponent(authorizationId)}/consent`, 'POST', { action: 'deny' });
+      return { data: asRedirect(result.data), error: result.error };
     },
   };
 }
@@ -155,5 +228,8 @@ export function createSupabasePortFromEnv(accessToken?: string): SupabasePort {
   if (!url || !publishableKey) {
     throw new Error('Supabase is not configured');
   }
-  return createSupabasePort(createSupabaseClient({ url, publishableKey, accessToken }));
+  return createSupabasePort(
+    createSupabaseClient({ url, publishableKey, accessToken }),
+    { url, publishableKey, accessToken: accessToken ?? '' },
+  );
 }

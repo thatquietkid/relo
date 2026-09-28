@@ -26,6 +26,7 @@ export interface AuthService {
 interface AuthServiceOptions {
   supabase: SupabaseAuthPort;
   frontendOrigin?: string;
+  googleRedirectAllowlist?: string[];
 }
 
 function normalizeEmail(email: string): string {
@@ -46,17 +47,31 @@ function toSession(session: SupabaseSession): SafeSession {
   };
 }
 
-function isAllowedRedirect(redirectTo: string, frontendOrigin: string): boolean {
+function configuredRedirects(frontendOrigin: string, configured?: string[]): string[] {
+  if (configured?.length) return configured;
+  const fromEnvironment = process.env.GOOGLE_AUTH_REDIRECT_ALLOWLIST
+    ?.split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (fromEnvironment?.length) return fromEnvironment;
+  return [`${frontendOrigin.replace(/\/$/, '')}/auth/callback`];
+}
+
+function isAllowedRedirect(redirectTo: string, allowedRedirects: string[]): boolean {
   try {
     const target = new URL(redirectTo);
-    const origin = new URL(frontendOrigin);
-    return target.origin === origin.origin;
+    return allowedRedirects.some((allowed) => target.href === new URL(allowed).href);
   } catch {
     return false;
   }
 }
 
-export function makeAuthService({ supabase, frontendOrigin = process.env.FRONTEND_ORIGIN ?? 'http://127.0.0.1:4173' }: AuthServiceOptions): AuthService {
+export function makeAuthService({
+  supabase,
+  frontendOrigin = process.env.FRONTEND_ORIGIN ?? 'http://127.0.0.1:4173',
+  googleRedirectAllowlist,
+}: AuthServiceOptions): AuthService {
+  const allowedRedirects = configuredRedirects(frontendOrigin, googleRedirectAllowlist);
   return {
     async requestEmailOtp(email) {
       const normalized = normalizeEmail(email);
@@ -95,7 +110,7 @@ export function makeAuthService({ supabase, frontendOrigin = process.env.FRONTEN
     },
 
     async getGoogleSignInUrl(redirectTo) {
-      if (!isAllowedRedirect(redirectTo, frontendOrigin)) {
+      if (!isAllowedRedirect(redirectTo, allowedRedirects)) {
         throw new ApiError(400, 'REDIRECT_NOT_ALLOWED', 'The redirect target is not allowed.');
       }
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -120,7 +135,7 @@ export function makeAuthService({ supabase, frontendOrigin = process.env.FRONTEN
 
     async logout(accessToken) {
       if (!accessToken.trim()) throw authRequired();
-      const { error } = await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut(accessToken);
       if (error) throw new ApiError(502, 'AUTH_PROVIDER_ERROR', 'Unable to sign out.');
       return { signedOut: true };
     },
