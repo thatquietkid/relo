@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { createClient } from '@supabase/supabase-js';
+import { isAdminRole, normalizeAdminEventQuery, toAdminEventView } from './admin-events.js';
 
 const port = Number(process.env.PORT || 4100);
 const host = process.env.HOST || '0.0.0.0';
@@ -97,6 +98,10 @@ function redirectUrl() {
   return process.env.FRONTEND_ORIGIN || 'http://127.0.0.1:4173';
 }
 
+function normalizedEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
 async function route(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const headers = corsHeaders();
@@ -118,6 +123,45 @@ async function route(req, res) {
       return;
     }
     const user = await currentUser({ headers: { authorization: `Bearer ${data.session.access_token}` } });
+    json(res, 200, { token: data.session.access_token, refreshToken: data.session.refresh_token, user }, headers);
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/auth/request-otp') {
+    const input = await readJson(req);
+    const email = normalizedEmail(input.email);
+    if (!email) {
+      json(res, 400, { error: 'Email is required' }, headers);
+      return;
+    }
+    const { error } = await publicClient().auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: false }
+    });
+    if (error) {
+      json(res, 400, { error: error.message }, headers);
+      return;
+    }
+    json(res, 202, { accepted: true, delivery: 'supabase-smtp' }, headers);
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/auth/verify-otp') {
+    const input = await readJson(req);
+    const email = normalizedEmail(input.email);
+    const token = String(input.token || '').trim();
+    if (!email || !/^\d{6}$/.test(token)) {
+      json(res, 400, { error: 'Enter the six digit code from your email' }, headers);
+      return;
+    }
+    const { data, error } = await publicClient().auth.verifyOtp({ email, token, type: 'email' });
+    if (error || !data.session) {
+      json(res, 401, { error: error?.message || 'That code is invalid or expired' }, headers);
+      return;
+    }
+    const user = await currentUser({ headers: { authorization: `Bearer ${data.session.access_token}` } });
+    if (!user) {
+      json(res, 403, { error: 'No Relo profile is configured for this account' }, headers);
+      return;
+    }
     json(res, 200, { token: data.session.access_token, refreshToken: data.session.refresh_token, user }, headers);
     return;
   }
@@ -193,6 +237,22 @@ async function route(req, res) {
     if (error) throw error;
     const metrics = Object.fromEntries((rows || []).map((row) => [row.metric_key, { label: row.metric_key[0].toUpperCase() + row.metric_key.slice(1), value: row.display_value, detail: row.detail, trend: row.trend }]));
     json(res, 200, { user: access.user, metrics, source: 'supabase.growth_metrics' }, headers);
+    return;
+  }
+  if (req.method === 'GET' && url.pathname === '/api/admin/events') {
+    const access = await requireRole(req, res, ['admin']);
+    if (!access || !isAdminRole(access.user.role)) return;
+    const filters = normalizeAdminEventQuery(url.searchParams);
+    let query = access.client
+      .from('platform_events')
+      .select('id, category, event_name, severity, summary, organization_id, actor_id, occurred_at, properties')
+      .order('occurred_at', { ascending: false })
+      .limit(filters.limit);
+    if (filters.category) query = query.eq('category', filters.category);
+    if (filters.severity) query = query.eq('severity', filters.severity);
+    const { data: events, error } = await query;
+    if (error) throw error;
+    json(res, 200, { user: access.user, events: (events || []).map(toAdminEventView) }, headers);
     return;
   }
   json(res, 404, { error: 'Not found' }, headers);

@@ -5,7 +5,7 @@ WORKDIR /app
 COPY backend/package*.json ./
 RUN npm install --omit=dev
 
-COPY backend/server.js ./
+COPY backend/server.js backend/admin-events.js ./
 
 ENV NODE_ENV=production
 EXPOSE 10000

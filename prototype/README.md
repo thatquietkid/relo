@@ -1,6 +1,6 @@
 # Relo prototype
 
-This is the frontend microservice prototype for the approved Relo relocation onboarding experience. The separate `backend/` service owns Supabase Auth sessions, RBAC, SMTP-triggered email flows, and AARRR metrics.
+This is the frontend microservice prototype for the approved Relo relocation onboarding experience. The separate `backend/` service owns Supabase Auth sessions, email OTP flows, RBAC, the admin event feed, SMTP-triggered email flows, and AARRR metrics.
 
 ## Run locally
 
@@ -31,13 +31,14 @@ The Node server binds to `0.0.0.0`, honors Render's `PORT`, serves `/healthz`, a
 
 ## What is interactive
 
-- Sign in through the backend. Dashboards are not rendered without a valid session.
+- Sign in through the backend with a six-digit email OTP. Dashboards are not rendered without a valid session.
 - Employee navigation: home, checklist, explore, saved, requests, and profile.
 - Complete checklist items to update progress.
 - Filter/search directory items, open details, save items, and submit a consent-based request.
 - HR navigation: overview, employees, programs, content, reports, and settings.
 - Invite an employee from the HR overview.
+- Admin navigation: major events, organizations, security, and settings. Major events are visible only to the `admin` role.
 
 ## Prototype boundary
 
-The UI state is still intentionally lightweight, but authentication and AARRR data now cross a real backend boundary. Supabase stores users, profiles, role, tenant membership, relocation cases, events, and metrics with RLS. Before production, replace fixture UI data with API-backed read models, add audited admin provisioning, and configure a real SMTP provider in Supabase Auth.
+The UI state is still intentionally lightweight, but authentication, AARRR data, and admin events now cross a real backend boundary. Supabase stores users, profiles, role, tenant membership, relocation cases, platform events, and metrics with RLS. Configure a real SMTP provider and an OTP email template containing `{{ .Token }}` in Supabase Auth before production.

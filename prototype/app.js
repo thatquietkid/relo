@@ -8,8 +8,10 @@ const listings = [
 ];
 
 const state = {
-  auth: { loggedIn: false, user: null, token: null, error: '' },
+  auth: { loggedIn: false, user: null, token: null, error: '', email: '', otpEmail: '', otpStep: 'request' },
   growth: null,
+  adminEvents: [],
+  adminFilter: { category: '', severity: '' },
   role: 'employee',
   view: 'home',
   filter: 'All',
@@ -47,6 +49,11 @@ function navItems() {
         ['home', '⌂', 'Home'], ['checklist', '✓', 'My checklist'], ['explore', '⌕', 'Explore'],
         ['saved', '♡', 'Saved'], ['requests', '↗', 'Requests'], ['profile', '○', 'Profile']
       ]
+    : state.role === 'admin'
+      ? [
+          ['events', '◉', 'Major events'], ['organizations', '◎', 'Organizations'], ['security', '⌁', 'Security'],
+          ['settings', '⚙', 'Settings']
+        ]
     : [
         ['dashboard', '⌂', 'Overview'], ['employees', '◎', 'Employees'], ['programs', '▦', 'Programs'],
         ['content', '✦', 'Content'], ['reports', '▤', 'Reports'], ['settings', '⚙', 'Settings']
@@ -58,6 +65,7 @@ function initials(user) {
 }
 
 function renderLogin() {
+  const verifying = state.auth.otpStep === 'verify';
   app.innerHTML = `
     <main class="login-shell">
       <section class="login-story">
@@ -75,27 +83,27 @@ function renderLogin() {
         <p class="story-note">Designed for the people moving — and the teams helping them get there.</p>
       </section>
       <section class="login-card">
-        <div class="login-panel-heading"><span class="eyebrow">Welcome back</span><span class="secure-note"><span class="secure-dot"></span>Private workspace</span></div>
-        <h2>Pick up where you left off.</h2>
-        <p class="login-panel-copy">Sign in with your work email to continue your relocation plan.</p>
-        <form id="login-form" class="login-form">
-          <div class="field"><label for="login-email">Work email</label><input id="login-email" type="email" autocomplete="email" required placeholder="you@company.com" /></div>
-          <div class="field"><label for="login-password">Password</label><input id="login-password" type="password" autocomplete="current-password" required placeholder="Your password" /></div>
+        <div class="login-panel-heading"><span class="eyebrow">${verifying ? 'Check your inbox' : 'Welcome back'}</span><span class="secure-note"><span class="secure-dot"></span>Passwordless access</span></div>
+        <h2>${verifying ? 'Enter your sign-in code.' : 'Pick up where you left off.'}</h2>
+        <p class="login-panel-copy">${verifying ? `We sent a six-digit code to <strong>${escapeHtml(state.auth.otpEmail)}</strong>.` : 'Sign in with your work email. Relo will send a one-time code through your company SMTP setup.'}</p>
+        <form id="otp-form" class="login-form">
+          ${verifying ? `<div class="field"><label for="otp-code">One-time code</label><input id="otp-code" class="otp-code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required placeholder="000000" /></div>` : `<div class="field"><label for="login-email">Work email</label><input id="login-email" type="email" autocomplete="email" required placeholder="you@company.com" value="${escapeHtml(state.auth.email || '')}" /></div>`}
           ${state.auth.error ? `<div class="login-error" role="alert">${escapeHtml(state.auth.error)}</div>` : ''}
-          <button class="button button-dark login-submit" type="submit"><span>Sign in</span><span class="button-arrow">↗</span></button>
+          <button class="button button-dark login-submit" type="submit"><span>${verifying ? 'Verify code' : 'Send sign-in code'}</span><span class="button-arrow">↗</span></button>
         </form>
-        <div class="login-divider"><span>Prototype access</span></div>
+        ${verifying ? `<button class="otp-back" data-otp-reset>Use a different email</button>` : ''}
+        <div class="login-divider"><span>${verifying ? 'Code not arriving?' : 'Configured access'}</span></div>
         <div class="login-demo-grid">
-          <button class="login-demo" data-demo-login="employee"><span class="demo-icon">↗</span><span><strong>Employee</strong><small>See your move plan</small></span></button>
-          <button class="login-demo" data-demo-login="hr"><span class="demo-icon">◒</span><span><strong>HR / admin</strong><small>Open programme view</small></span></button>
+          <button class="login-demo" data-demo-login="employee"><span class="demo-icon">↗</span><span><strong>Employee</strong><small>Fill employee email</small></span></button>
+          <button class="login-demo" data-demo-login="hr"><span class="demo-icon">◒</span><span><strong>HR / admin</strong><small>Fill HR email</small></span></button>
         </div>
-        <p class="login-footnote">Email verification, password reset, and invitations are delivered through the backend SMTP boundary.</p>
+        <p class="login-footnote">Only provisioned accounts can request a code. Email delivery is handled by the Supabase SMTP configuration.</p>
       </section>
     </main>`;
 }
 
 function renderShell() {
-  const currentLabel = navItems().find(([id]) => id === state.view)?.[2] || (state.role === 'employee' ? 'Home' : 'Overview');
+  const currentLabel = navItems().find(([id]) => id === state.view)?.[2] || (state.role === 'employee' ? 'Home' : state.role === 'admin' ? 'Major events' : 'Overview');
   const user = state.auth.user;
   app.innerHTML = `
     <aside class="sidebar">
@@ -111,8 +119,8 @@ function renderShell() {
       </div>
     </aside>
     <main class="main">
-      <header class="topbar"><div><div class="eyebrow">${state.role === 'employee' ? 'Your relocation' : 'Mobility workspace'}</div><div class="topbar-title">${currentLabel}</div></div><div class="topbar-actions"><button class="icon-button" aria-label="Open notifications">♢</button><button class="icon-button" aria-label="Open help">?</button><span class="avatar">${initials(user)}</span><button class="button button-quiet button-small" data-logout onclick="window.logoutRelo()">Sign out</button></div></header>
-      <section class="content">${state.role === 'employee' ? renderEmployee() : renderHr()} </section>
+      <header class="topbar"><div><div class="eyebrow">${state.role === 'employee' ? 'Your relocation' : state.role === 'admin' ? 'Platform control plane' : 'Mobility workspace'}</div><div class="topbar-title">${currentLabel}</div></div><div class="topbar-actions"><button class="icon-button" aria-label="Open notifications">♢</button><button class="icon-button" aria-label="Open help">?</button><span class="avatar">${initials(user)}</span><button class="button button-quiet button-small" data-logout onclick="window.logoutRelo()">Sign out</button></div></header>
+      <section class="content">${state.role === 'employee' ? renderEmployee() : state.role === 'admin' ? renderAdmin() : renderHr()} </section>
     </main>
     <nav class="mobile-nav" aria-label="Mobile navigation">
       ${navItems().slice(0, 5).map(([id, icon, label]) => `<button class="mobile-nav-item ${state.view === id ? 'active' : ''}" data-nav="${id}"><span>${icon}</span><small>${label}</small></button>`).join('')}
@@ -220,6 +228,35 @@ function renderHrContent() { return `<div class="page-heading"><div><div class="
 function renderHrReports() { return `<div class="page-heading"><div><div class="eyebrow">Signals, not surveillance</div><h1>Reports.</h1></div><p>Understand whether relocation support is helping people get settled, without turning the workspace into a monitoring tool.</p></div><div class="stat-row"><div class="stat"><strong>12d</strong><span>Average time to first action</span><span class="trend">↓ 2 days this quarter</span></div><div class="stat"><strong>86%</strong><span>Invitation acceptance</span><span class="trend">↑ 9 pts this quarter</span></div><div class="stat"><strong>4.7/5</strong><span>Employee helpfulness score</span><span class="trend">Based on 27 responses</span></div></div><section class="panel panel-pad" style="margin-top:22px"><div class="panel-heading"><div><h2>What employees use</h2><p>Aggregate activity · last 30 days</p></div></div><div class="checklist"><div class="check-item"><div class="activity-icon">⌂</div><div class="check-copy"><strong>Housing recommendations</strong><span>Most visited content category</span></div><strong>68%</strong></div><div class="check-item"><div class="activity-icon">↗</div><div class="check-copy"><strong>Moving-service requests</strong><span>Requests that received acknowledgement</span></div><strong>92%</strong></div><div class="check-item"><div class="activity-icon">✓</div><div class="check-copy"><strong>Checklist completion</strong><span>Employees completing at least one step</span></div><strong>81%</strong></div></div></section>`; }
 function renderHrSettings() { return `<div class="page-heading"><div><div class="eyebrow">Control the defaults</div><h1>Settings.</h1></div><p>Manage programme defaults and access. Employee privacy stays the default, not a preference someone has to discover.</p></div><section class="panel panel-pad"><div class="panel-heading"><div><h2>Workspace settings</h2><p>Relo starter programme</p></div></div><div class="checklist"><div class="check-item"><div class="activity-icon">◌</div><div class="check-copy"><strong>Employee notes</strong><span>Private by default · HR sees operational statuses only</span></div><span class="badge active">On</span></div><div class="check-item"><div class="activity-icon">♢</div><div class="check-copy"><strong>Reminder cadence</strong><span>One nudge at 7 days, one at 2 days</span></div><button class="button button-quiet button-small" data-toast="Reminder settings are represented in the prototype.">Edit</button></div><div class="check-item"><div class="activity-icon">⌁</div><div class="check-copy"><strong>Single sign-on</strong><span>Managed by your identity provider</span></div><span class="badge active">Connected</span></div></div></section>`; }
 
+function renderAdmin() {
+  const views = { events: renderAdminEvents, organizations: renderAdminOrganizations, security: renderAdminSecurity, settings: renderAdminSettings };
+  return (views[state.view] || renderAdminEvents)();
+}
+
+function adminEventTime(value) {
+  return new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+}
+
+function renderAdminEvents() {
+  const events = state.adminEvents;
+  const critical = events.filter((event) => event.severity === 'critical').length;
+  const warning = events.filter((event) => event.severity === 'warning').length;
+  const categories = ['all', 'auth', 'relocation', 'content', 'growth', 'system'];
+  return `<div class="page-heading admin-heading"><div><div class="eyebrow">Platform control plane · live feed</div><h1>Major events, without the noise.</h1></div><div><p>One operational view for the moments that can affect trust, access, and programme health across Relo.</p><button class="button button-primary" data-toast="Event ingestion is append-only and tenant-scoped.">Event policy</button></div></div><div class="admin-signal-row"><div class="admin-signal admin-signal-critical"><strong>${critical}</strong><span>Critical in view</span><small>Needs an owner</small></div><div class="admin-signal admin-signal-warning"><strong>${warning}</strong><span>Warnings in view</span><small>Worth a follow-up</small></div><div class="admin-signal admin-signal-live"><strong>${events.length}</strong><span>Events loaded</span><small>Latest first · max 100</small></div></div><section class="panel panel-pad admin-events-panel"><div class="panel-heading"><div><div class="eyebrow">Event stream</div><h2>What changed recently</h2><p>Only administrators can read this cross-tenant operational feed.</p></div><span class="badge active">Admin only</span></div><div class="event-filters">${categories.map((category) => `<button class="filter ${state.adminFilter.category === (category === 'all' ? '' : category) ? 'active' : ''}" data-admin-filter="${category}">${category === 'all' ? 'All events' : category}</button>`).join('')}</div><div class="event-list">${events.length ? events.map((event) => `<article class="event-row severity-${escapeHtml(event.severity)}"><div class="event-marker"><span></span></div><div class="event-copy"><div class="event-meta"><span class="event-category">${escapeHtml(event.category)}</span><span>${adminEventTime(event.occurredAt)}</span></div><h3>${escapeHtml(event.summary)}</h3><p>${escapeHtml(event.eventName.replaceAll('_', ' '))}</p></div><span class="event-severity">${escapeHtml(event.severity)}</span></article>`).join('') : `<div class="empty-state"><div class="empty-mark">◉</div><h2>No events match</h2><p>Try another category or wait for the next operational signal.</p></div>`}</div></section>`;
+}
+
+function renderAdminOrganizations() {
+  return `<div class="page-heading"><div><div class="eyebrow">Tenant boundaries</div><h1>Organizations.</h1></div><p>Keep customer workspaces isolated while giving the platform team a clear operational inventory.</p></div><section class="panel panel-pad"><div class="panel-heading"><div><h2>Organization registry</h2><p>Organization management will be connected to the control-plane service.</p></div><span class="badge active">Admin only</span></div><div class="empty-state"><div class="empty-mark">◎</div><h2>Registry surface ready</h2><p>The admin event feed is live first. Organization actions remain intentionally read-only in this prototype.</p></div></section>`;
+}
+
+function renderAdminSecurity() {
+  return `<div class="page-heading"><div><div class="eyebrow">Access and trust</div><h1>Security signals.</h1></div><p>Review the authentication and authorization events that deserve a human owner.</p></div><section class="panel panel-pad"><div class="panel-heading"><div><h2>Authentication posture</h2><p>OTP delivery, role boundaries, and deployment health</p></div><span class="badge active">Protected</span></div><div class="checklist"><div class="check-item"><div class="activity-icon">⌁</div><div class="check-copy"><strong>Email OTP</strong><span>Provisioned users only · Supabase SMTP</span></div><span class="badge active">Enabled</span></div><div class="check-item"><div class="activity-icon">◎</div><div class="check-copy"><strong>Admin event access</strong><span>RLS policy restricts reads to the admin role</span></div><span class="badge active">Enforced</span></div></div></section>`;
+}
+
+function renderAdminSettings() {
+  return `<div class="page-heading"><div><div class="eyebrow">Platform defaults</div><h1>Admin settings.</h1></div><p>Deployment-owned configuration stays outside the client and is supplied through Render and Supabase.</p></div><section class="panel panel-pad"><div class="panel-heading"><div><h2>Current boundaries</h2><p>Safe defaults for the prototype</p></div></div><div class="checklist"><div class="check-item"><div class="activity-icon">✦</div><div class="check-copy"><strong>SMTP credentials</strong><span>Configured in the deployment portal</span></div><span class="badge pending">Pending</span></div><div class="check-item"><div class="activity-icon">⌁</div><div class="check-copy"><strong>Event retention</strong><span>Append-only events with indexed timestamps</span></div><span class="badge active">Ready</span></div></div></section>`;
+}
+
 function renderModal() {
   if (state.modal?.type === 'request') {
     const item = listings.find((listing) => listing.id === state.modal.listingId);
@@ -257,39 +294,54 @@ function persistSession() {
 }
 
 function setSession(user, token) {
-  state.auth = { loggedIn: true, user, token, error: '' };
-  state.role = user.role === 'employee' ? 'employee' : 'hr';
-  state.view = state.role === 'employee' ? 'home' : 'dashboard';
+  state.auth = { loggedIn: true, user, token, error: '', email: '', otpEmail: '', otpStep: 'request' };
+  state.role = user.role === 'employee' ? 'employee' : user.role === 'admin' ? 'admin' : 'hr';
+  state.view = state.role === 'employee' ? 'home' : state.role === 'admin' ? 'events' : 'dashboard';
   state.growth = null;
+  state.adminEvents = [];
   persistSession();
   render();
   if (state.role === 'hr') loadGrowth();
+  if (state.role === 'admin') loadAdminEvents();
 }
 
-async function loginWithCredentials(email, password) {
+async function requestOtp(email) {
+  state.auth.error = '';
+  state.auth.email = email.trim().toLowerCase();
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/request-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: state.auth.email }) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Unable to send a sign-in code');
+    state.auth.otpEmail = state.auth.email;
+    state.auth.otpStep = 'verify';
+    render();
+  } catch (error) {
+    state.auth.error = error.message === 'Failed to fetch' ? 'The auth service is unavailable. Check the deployment.' : error.message;
+    render();
+  }
+}
+
+async function verifyOtp(token) {
   state.auth.error = '';
   try {
-    const response = await fetch(`${API_BASE_URL}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+    const response = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: state.auth.otpEmail, token }) });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Unable to sign in');
+    if (!response.ok) throw new Error(data.error || 'Unable to verify the sign-in code');
     setSession(data.user, data.token);
   } catch (error) {
-    state.auth.error = error.message === 'Failed to fetch' ? 'The auth service is unavailable. Use prototype access or start the backend service.' : error.message;
+    state.auth.error = error.message === 'Failed to fetch' ? 'The auth service is unavailable. Check the deployment.' : error.message;
     render();
   }
 }
 
 function demoLogin(role) {
-  const email = role === 'hr' ? 'ananya@demo.relo' : 'rohan@demo.relo';
-  const emailInput = document.querySelector('#login-email');
-  const passwordInput = document.querySelector('#login-password');
-  if (emailInput && passwordInput) {
-    emailInput.value = email;
-    passwordInput.value = '';
-    passwordInput.focus();
-    state.auth.error = `Enter the ${role} account password, then sign in.`;
-    render();
-  }
+  const email = role === 'admin' ? 'nitinch131@gmail.com' : role === 'hr' ? 'ananya@demo.relo' : 'rohan@demo.relo';
+  state.auth.email = email;
+  state.auth.error = '';
+  state.auth.otpStep = 'request';
+  state.auth.otpEmail = '';
+  render();
+  document.querySelector('#login-email')?.focus();
 }
 
 async function loadGrowth() {
@@ -305,14 +357,32 @@ async function loadGrowth() {
   }
 }
 
+async function loadAdminEvents() {
+  if (!state.auth.token || state.role !== 'admin') return;
+  const query = new URLSearchParams({ limit: '100' });
+  if (state.adminFilter.category) query.set('category', state.adminFilter.category);
+  if (state.adminFilter.severity) query.set('severity', state.adminFilter.severity);
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/admin/events?${query.toString()}`, { headers: { Authorization: `Bearer ${state.auth.token}` } });
+    if (!response.ok) throw new Error('Unable to load admin events');
+    const data = await response.json();
+    state.adminEvents = data.events || [];
+    render();
+  } catch (error) {
+    state.auth.error = error.message;
+    render();
+  }
+}
+
 function logout() {
   if (state.auth.token) {
     fetch(`${API_BASE_URL}/api/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${state.auth.token}` } }).catch(() => {});
   }
-  state.auth = { loggedIn: false, user: null, token: null, error: '' };
+  state.auth = { loggedIn: false, user: null, token: null, error: '', email: '', otpEmail: '', otpStep: 'request' };
   state.role = 'employee';
   state.view = 'home';
   state.growth = null;
+  state.adminEvents = [];
   persistSession();
   render();
 }
@@ -326,6 +396,7 @@ window.logoutRelo = logout;
 app.addEventListener('click', (event) => {
   const demoRole = event.target.closest('[data-demo-login]')?.dataset.demoLogin;
   if (demoRole) { demoLogin(demoRole); return; }
+  if (event.target.closest('[data-otp-reset]')) { state.auth.otpStep = 'request'; state.auth.otpEmail = ''; state.auth.error = ''; render(); return; }
   if (event.target.closest('[data-logout]')) { logout(); return; }
   const role = event.target.closest('[data-role]')?.dataset.role;
   if (role && state.auth.loggedIn) { state.role = role; state.view = role === 'employee' ? 'home' : 'dashboard'; render(); return; }
@@ -333,6 +404,8 @@ app.addEventListener('click', (event) => {
   if (nav) { event.preventDefault(); navigate(nav); return; }
   const filter = event.target.closest('[data-filter]')?.dataset.filter;
   if (filter) { state.filter = filter; render(); return; }
+  const adminFilter = event.target.closest('[data-admin-filter]')?.dataset.adminFilter;
+  if (adminFilter) { state.adminFilter.category = adminFilter === 'all' ? '' : adminFilter; loadAdminEvents(); return; }
   const complete = event.target.closest('[data-complete]')?.dataset.complete;
   if (complete) { const item = state.checklist.find((entry) => entry.id === complete); if (item && item.status !== 'locked') { item.done = !item.done; showToast(item.done ? 'Checklist step marked complete.' : 'Checklist step reopened.'); } return; }
   const save = event.target.closest('[data-save]')?.dataset.save;
@@ -353,9 +426,13 @@ app.addEventListener('input', (event) => {
 });
 
 app.addEventListener('submit', (event) => {
-  if (event.target.id === 'login-form') {
+  if (event.target.id === 'otp-form') {
     event.preventDefault();
-    loginWithCredentials(document.querySelector('#login-email').value, document.querySelector('#login-password').value);
+    if (state.auth.otpStep === 'verify') {
+      verifyOtp(document.querySelector('#otp-code').value);
+    } else {
+      requestOtp(document.querySelector('#login-email').value);
+    }
     return;
   }
   if (event.target.id === 'request-form') {
