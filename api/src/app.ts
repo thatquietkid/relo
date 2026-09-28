@@ -1,13 +1,17 @@
 import sensible from '@fastify/sensible';
 import Fastify, {
-  type FastifyError,
   type FastifyInstance,
   type FastifyServerOptions,
 } from 'fastify';
-import { ApiError, toApiErrorResponse } from './shared/errors.js';
+import { ApiError } from './shared/errors.js';
+import { MAX_BODY_SIZE, sendError } from './shared/http.js';
 
 export function createApp(options: FastifyServerOptions = {}): FastifyInstance {
-  const app = Fastify(options);
+  const app = Fastify({
+    ...options,
+    bodyLimit: Math.min(options.bodyLimit ?? MAX_BODY_SIZE, MAX_BODY_SIZE),
+    requestIdHeader: 'x-request-id',
+  });
 
   app.register(sensible);
 
@@ -19,24 +23,10 @@ export function createApp(options: FastifyServerOptions = {}): FastifyInstance {
 
   app.setNotFoundHandler((request, reply) => {
     const error = new ApiError(404, 'NOT_FOUND', 'The requested resource was not found.');
-    return reply.status(error.statusCode).send(toApiErrorResponse(error, request.id));
+    return sendError(reply, error);
   });
 
-  app.setErrorHandler((error: FastifyError, request, reply) => {
-    if (error instanceof ApiError) {
-      return reply.status(error.statusCode).send(toApiErrorResponse(error, request.id));
-    }
-
-    const candidateStatusCode = error.statusCode ?? 500;
-    const statusCode = candidateStatusCode >= 400 && candidateStatusCode < 500 ? candidateStatusCode : 500;
-    const apiError = new ApiError(
-      statusCode,
-      statusCode === 400 ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR',
-      statusCode === 400 ? 'The request was invalid.' : 'An unexpected error occurred.',
-      statusCode === 400 ? error.validation : undefined,
-    );
-    return reply.status(apiError.statusCode).send(toApiErrorResponse(apiError, request.id));
-  });
+  app.setErrorHandler((error, _request, reply) => sendError(reply, error));
 
   return app;
 }

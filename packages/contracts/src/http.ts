@@ -6,3 +6,7 @@ export interface ApiErrorResponse {
     details?: unknown;
   };
 }
+
+export type IdempotencyKey = string & {
+  readonly __brand: 'IdempotencyKey';
+};
