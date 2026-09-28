@@ -40,6 +40,7 @@ export interface SupabaseAuthPort {
     signOut(accessToken: string): Promise<{ error: SupabaseError | null }>;
   };
   getActiveMemberships(userId: string): Promise<MembershipView[]>;
+  getMemberships?(userId: string): Promise<MembershipView[]>;
 }
 
 export interface SupabaseInvitationPort {
@@ -116,6 +117,15 @@ function mapMembership(row: Record<string, unknown>): MembershipView {
   };
 }
 
+async function loadMemberships(client: SupabaseClient, userId: string): Promise<MembershipView[]> {
+  const { data, error } = await client
+    .from('memberships')
+    .select('id, tenant_id, user_id, status, joined_at, suspended_at, tenant:tenants(id, name, slug, status), membership_roles(role:roles(id, key))')
+    .eq('user_id', userId);
+  if (error) throw error;
+  return (data ?? []).map((row) => mapMembership(row as Record<string, unknown>));
+}
+
 async function parseResponse(response: Response): Promise<unknown> {
   const body = await response.text();
   if (!body) return null;
@@ -185,14 +195,12 @@ export function createSupabasePort(client: SupabaseClient, restConfig?: Supabase
         return { error: result.error };
       },
     },
+    async getMemberships(userId) {
+      return loadMemberships(client, userId);
+    },
     async getActiveMemberships(userId) {
-      const { data, error } = await client
-        .from('memberships')
-        .select('id, tenant_id, user_id, status, joined_at, suspended_at, tenant:tenants(id, name, slug, status), membership_roles(role:roles(id, key))')
-        .eq('user_id', userId)
-        .eq('status', 'active');
-      if (error) throw error;
-      return (data ?? []).map((row) => mapMembership(row as Record<string, unknown>));
+      const memberships = await loadMemberships(client, userId);
+      return memberships.filter((membership) => membership.status === 'active');
     },
     async acceptInvitation(userId, rawToken) {
       const { data, error } = await client.rpc('accept_invitation', {

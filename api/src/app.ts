@@ -7,6 +7,7 @@ import { ApiError } from './shared/errors.js';
 import { MAX_BODY_SIZE, sendError } from './shared/http.js';
 import { registerAuthRoutes, type AuthRouteDependencies } from './identity/auth-routes.js';
 import { registerOAuthRoutes, type OAuthRouteDependencies } from './oauth/routes.js';
+import './authorization/policy.js';
 
 export interface AppDependencies extends AuthRouteDependencies, OAuthRouteDependencies {}
 
@@ -18,6 +19,7 @@ export function createApp(options: FastifyServerOptions = {}, dependencies: AppD
   });
 
   app.register(sensible);
+  app.decorateRequest('relo', null);
 
   app.addHook('onRequest', async (request, reply) => {
     reply.header('X-Request-Id', request.id);

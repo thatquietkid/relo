@@ -8,4 +8,5 @@ export type AuthProvider = 'email' | 'google';
 export interface IdentityContext {
   user: AuthUser;
   memberships: MembershipView[];
+  platformScope?: boolean;
 }
