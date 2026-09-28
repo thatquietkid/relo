@@ -1,4 +1,5 @@
 import type { ApiErrorResponse } from '@relo/contracts/http';
+import type { PlatformAuthorizationSummary } from '@relo/contracts/auth';
 
 export interface WebSession {
   accessToken: string;
@@ -24,6 +25,7 @@ export interface WebIdentity {
   memberships: WebMembership[];
   platformScope?: boolean;
   platformRoles?: string[];
+  platformAuthorization?: PlatformAuthorizationSummary;
 }
 
 export interface AuthorizationDetails {

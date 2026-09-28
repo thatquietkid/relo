@@ -65,9 +65,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyOtp = useCallback(async (email: string, token: string) => {
     const result = await client.verifyOtp(email, token);
+    const nextIdentity = await client.getCurrentIdentity(result.session.accessToken);
     storeSession(result.session);
     setSession(result.session);
-    setIdentity(result.identity);
+    setIdentity(nextIdentity);
     setStatus('authenticated');
   }, []);
 

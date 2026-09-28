@@ -1,4 +1,4 @@
-import type { AuthUser } from '@relo/contracts/auth';
+import type { AuthUser, PlatformAuthorizationSummary } from '@relo/contracts/auth';
 import type { MembershipView } from '../tenancy/types.js';
 
 export type { AuthUser } from '@relo/contracts/auth';
@@ -10,4 +10,5 @@ export interface IdentityContext {
   memberships: MembershipView[];
   platformScope?: boolean;
   platformRoles?: string[];
+  platformAuthorization?: PlatformAuthorizationSummary;
 }

@@ -34,3 +34,15 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+
+  - type: worker
+    name: relo-worker
+    runtime: docker
+    region: singapore
+    plan: free
+    dockerfilePath: ./worker/Dockerfile
+    dockerContext: .
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production

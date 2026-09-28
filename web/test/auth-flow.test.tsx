@@ -234,12 +234,18 @@ describe('authenticated web shell', () => {
       ...employeeIdentity,
       platformScope: true,
       platformRoles: ['platform_admin'],
+      platformAuthorization: { scope: 'tenant', roles: [], permissions: [] },
       memberships: [{ ...employeeIdentity.memberships[0], roles: [{ id: 'role-admin', key: 'admin' }] }],
     });
 
     renderWithAuth(<ProtectedRoute permission="tenant-admin:read"><div>tenant admin</div></ProtectedRoute>);
     expect(await screen.findByText('tenant admin')).toBeInTheDocument();
     cleanup();
+    authClient.getCurrentIdentity.mockResolvedValue({
+      ...employeeIdentity,
+      platformAuthorization: { scope: 'platform', roles: ['platform_admin'], permissions: ['platform:health:read'] },
+      memberships: [],
+    });
     renderWithAuth(<ProtectedRoute permission="platform:health:read"><div>platform health</div></ProtectedRoute>);
     expect(await screen.findByText('platform health')).toBeInTheDocument();
   });

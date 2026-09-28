@@ -12,7 +12,10 @@ const platformPermissions = ['platform:tenants:manage', 'platform:roles:manage',
 
 function can(identity: ReturnType<typeof useAuth>['identity'], permission: string): boolean {
   if (!identity) return false;
-  if (identity.platformScope === true && identity.platformRoles?.includes('platform_admin') && platformPermissions.includes(permission)) return true;
+  if (identity.platformAuthorization?.scope === 'platform'
+    && identity.platformAuthorization.roles.includes('platform_admin')
+    && identity.platformAuthorization.permissions.includes(permission)
+    && platformPermissions.includes(permission)) return true;
   return identity.memberships.some((membership) => membership.status === 'active'
     && membership.roles.some((role) => rolePermissions[role.key]?.includes(permission)));
 }

@@ -1,6 +1,7 @@
 import { ApiError } from '../shared/errors.js';
 import type { IdentityContext } from './types.js';
 import type { SupabaseAuthPort, SupabaseSession } from './supabase.js';
+import { PERMISSIONS } from '../authorization/policy.js';
 
 export interface SafeSession {
   accessToken: string;
@@ -64,6 +65,27 @@ function isAllowedRedirect(redirectTo: string, allowedRedirects: string[]): bool
   } catch {
     return false;
   }
+}
+
+async function platformAuthorization(supabase: SupabaseAuthPort): Promise<Pick<IdentityContext, 'platformScope' | 'platformRoles' | 'platformAuthorization'>> {
+  const isPlatformAdmin = await supabase.isPlatformAdmin?.() ?? false;
+  if (!isPlatformAdmin) return {};
+  return {
+    platformScope: true,
+    platformRoles: ['platform_admin'],
+    platformAuthorization: {
+      scope: 'platform',
+      roles: ['platform_admin'],
+      permissions: [
+        PERMISSIONS.PLATFORM_TENANTS_MANAGE,
+        PERMISSIONS.PLATFORM_ROLES_MANAGE,
+        PERMISSIONS.PLATFORM_SECURITY_MANAGE,
+        PERMISSIONS.PLATFORM_AUDIT_READ,
+        PERMISSIONS.PLATFORM_HEALTH_READ,
+        PERMISSIONS.PLATFORM_FEATURE_FLAGS_MANAGE,
+      ],
+    },
+  };
 }
 
 export function makeAuthService({
@@ -130,6 +152,7 @@ export function makeAuthService({
       return {
         user: { id: data.user.id, email: data.user.email ?? null },
         memberships: await supabase.getActiveMemberships(data.user.id),
+        ...(await platformAuthorization(supabase)),
       };
     },
 

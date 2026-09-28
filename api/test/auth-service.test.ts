@@ -151,4 +151,24 @@ describe('auth service', () => {
     await expect(auth.getCurrentIdentity('')).rejects.toMatchObject({ code: 'AUTHENTICATION_REQUIRED' });
     await expect(auth.getCurrentIdentity('bad-token')).rejects.toMatchObject({ code: 'AUTHENTICATION_REQUIRED' });
   });
+
+  it('exposes a safe platform authorization summary only for platform admins', async () => {
+    const supabase = fakeSupabase({ isPlatformAdmin: vi.fn().mockResolvedValue(true) });
+    const auth = makeAuthService({ supabase });
+
+    await expect(auth.getCurrentIdentity('platform-token')).resolves.toMatchObject({
+      platformAuthorization: {
+        scope: 'platform',
+        roles: ['platform_admin'],
+        permissions: expect.arrayContaining(['platform:health:read', 'platform:audit:read']),
+      },
+    });
+  });
+
+  it('does not grant a tenant admin platform authorization', async () => {
+    const supabase = fakeSupabase({ isPlatformAdmin: vi.fn().mockResolvedValue(false) });
+    const auth = makeAuthService({ supabase });
+
+    await expect(auth.getCurrentIdentity('tenant-token')).resolves.not.toHaveProperty('platformAuthorization.scope', 'platform');
+  });
 });
