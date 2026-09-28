@@ -23,4 +23,4 @@ COPY --from=build /app/web/dist /usr/share/nginx/html
 
 USER nginx
 EXPOSE 10000
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["nginx", "-g", "daemon off; pid /tmp/nginx.pid;"]
