@@ -3,8 +3,8 @@ import { ApiError, toApiErrorResponse } from './errors.js';
 
 export const MAX_BODY_SIZE = 1_048_576;
 
-function isHttpStatus(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 400 && value <= 599;
+function isClientErrorStatus(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 400 && value < 500;
 }
 
 function toApiError(error: unknown): ApiError {
@@ -13,7 +13,7 @@ function toApiError(error: unknown): ApiError {
   }
 
   const candidate = error as FastifyError;
-  const statusCode = isHttpStatus(candidate?.statusCode) ? candidate.statusCode : 500;
+  const statusCode = isClientErrorStatus(candidate?.statusCode) ? candidate.statusCode : 500;
 
   if (statusCode === 413) {
     return new ApiError(413, 'PAYLOAD_TOO_LARGE', 'The request body is too large.');
