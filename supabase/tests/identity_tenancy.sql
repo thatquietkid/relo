@@ -4,7 +4,7 @@ create schema if not exists extensions;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth, pg_catalog;
 
-select plan(31);
+select plan(42);
 
 select has_table('public', 'tenants', 'tenants table exists');
 select has_table('public', 'memberships', 'memberships table exists');
@@ -13,6 +13,7 @@ select has_table('public', 'roles', 'roles table exists');
 select has_table('public', 'membership_roles', 'membership_roles table exists');
 select has_table('public', 'audit_logs', 'audit_logs table exists');
 select has_table('public', 'idempotency_keys', 'idempotency_keys table exists');
+select ok(to_regclass('public.invitation_views') is not null, 'safe invitation view exists');
 
 select ok((select relrowsecurity from pg_class where oid = 'public.tenants'::regclass), 'RLS enabled on tenants');
 select ok((select relrowsecurity from pg_class where oid = 'public.memberships'::regclass), 'RLS enabled on memberships');
@@ -24,11 +25,21 @@ select ok((select relrowsecurity from pg_class where oid = 'public.idempotency_k
 
 select policies_are('public', 'tenants', array['members can view same tenant']);
 select policies_are('public', 'memberships', array['members can view same tenant memberships']);
-select policies_are('public', 'roles', array[]::text[]);
+select policies_are('public', 'roles', array['authenticated users can view roles']);
 select policies_are('public', 'membership_roles', array['members can view assigned roles']);
 select policies_are('public', 'invitations', array['tenant HR can view invitations']);
 select policies_are('public', 'audit_logs', array['tenant admins can view audit logs']);
 select policies_are('public', 'idempotency_keys', array['actors can use idempotency keys', 'actors can create idempotency keys']);
+
+select ok(not has_table_privilege('authenticated', 'public.invitations', 'SELECT'), 'raw invitations table SELECT is revoked for authenticated');
+select ok(not has_column_privilege('authenticated', 'public.invitations', 'token_hash', 'SELECT'), 'invitation token_hash SELECT is revoked for authenticated');
+select ok(not exists (
+  select 1
+    from information_schema.columns
+   where table_schema = 'public'
+     and table_name = 'invitation_views'
+     and column_name = 'token_hash'
+), 'safe invitation view omits token_hash');
 
 insert into auth.users (id, email)
 values
@@ -68,6 +79,17 @@ values (
   '00000000-0000-0000-0000-000000000202'
 );
 
+insert into public.invitations (id, tenant_id, email, role_key, token_hash, expires_at, invited_by)
+values (
+  '00000000-0000-0000-0000-000000000302',
+  '00000000-0000-0000-0000-000000000001',
+  'safe-invitee@example.com',
+  'employee',
+  public.hash_invitation_token('identity-test-safe-invitation'),
+  now() + interval '1 day',
+  '00000000-0000-0000-0000-000000000101'
+);
+
 insert into public.audit_logs (id, tenant_id, actor_user_id, action, resource_type, metadata)
 values (
   '00000000-0000-0000-0000-000000000401',
@@ -95,6 +117,18 @@ set local "request.jwt.claim.sub" = '00000000-0000-0000-0000-000000000101';
 
 select ok(public.has_role('00000000-0000-0000-0000-000000000001'::uuid, 'hr'), 'has_role allows a role in the requested tenant');
 select ok(not public.has_role('00000000-0000-0000-0000-000000000002'::uuid, 'hr'), 'has_role denies a role from another tenant');
+
+select isnt_empty(
+  $$select id from public.invitation_views where id = '00000000-0000-0000-0000-000000000302'::uuid$$,
+  'HR can read the safe invitation view'
+);
+
+select throws_ok(
+  $$select token_hash from public.invitations where id = '00000000-0000-0000-0000-000000000302'::uuid$$,
+  '42501',
+  null,
+  'HR cannot read invitation token_hash from the raw table'
+);
 
 select is_empty(
   $$select 1 from public.tenants where id = '00000000-0000-0000-0000-000000000002'::uuid$$,
@@ -126,14 +160,53 @@ select is_empty(
   'a member cannot read another tenant membership roles'
 );
 
-select is_empty(
-  $$select 1 from public.roles$$,
-  'normal authenticated users cannot read the controlled role catalogue'
+select isnt_empty(
+  $$select 1 from public.roles where key = 'employee'$$,
+  'authenticated users can read static role definitions'
 );
 
 select is_empty(
   $$select 1 from public.idempotency_keys where id = '00000000-0000-0000-0000-000000000501'::uuid$$,
   'a member cannot read another tenant idempotency keys'
+);
+
+select throws_ok(
+  $$insert into public.membership_roles (membership_id, role_id)
+    select '00000000-0000-0000-0000-000000000011'::uuid, id from public.roles where key = 'admin'$$,
+  '42501',
+  null,
+  'authenticated users cannot insert membership roles'
+);
+
+select throws_ok(
+  $$update public.membership_roles set role_id = role_id
+      where membership_id = '00000000-0000-0000-0000-000000000013'::uuid$$,
+  '42501',
+  null,
+  'authenticated users cannot update membership roles'
+);
+
+select throws_ok(
+  $$delete from public.membership_roles
+      where membership_id = '00000000-0000-0000-0000-000000000013'::uuid$$,
+  '42501',
+  null,
+  'authenticated users cannot delete membership roles'
+);
+
+set local role anon;
+select throws_ok(
+  $$select 1 from public.tenants$$,
+  '42501',
+  null,
+  'anonymous users cannot read tenants'
+);
+
+select throws_ok(
+  $$select 1 from public.invitation_views$$,
+  '42501',
+  null,
+  'anonymous users cannot read the safe invitation view'
 );
 
 select * from finish();

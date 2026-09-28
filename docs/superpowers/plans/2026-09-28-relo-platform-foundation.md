@@ -165,7 +165,7 @@ git commit -m "feat: add typed API validation and errors"
 - `tenants(id, name, slug, status, created_at, updated_at)` is the organization source of truth.
 - `memberships(id, tenant_id, user_id, status, joined_at, suspended_at)` links Supabase users to tenants.
 - `roles(id, key)` and `membership_roles(membership_id, role_id)` provide role assignment.
-- `invitations(id, tenant_id, email, role_key, token_hash, status, expires_at, accepted_at, invited_by)` tracks controlled onboarding.
+- `invitations(id, tenant_id, email, role_key, token_hash, status, expires_at, accepted_at, invited_by)` tracks controlled onboarding; authenticated reads use a safe projection that omits `token_hash`.
 - `audit_logs(id, tenant_id, actor_user_id, action, resource_type, resource_id, metadata, created_at)` records security-sensitive changes.
 - `idempotency_keys(tenant_id, actor_user_id, key, request_hash, response_status, response_body, created_at, expires_at)` stores replay results.
 - Helper SQL functions `current_tenant_ids()` and tenant-scoped `has_role(uuid, text)` are `security definer` functions with a fixed `search_path`.
@@ -188,7 +188,7 @@ Expected: FAIL because the tables and policies are not present.
 
 - [ ] **Step 3: Add tables, constraints, indexes, trigger helpers, and RLS**
 
-Use unique constraints for `(tenant_id, lower(email), status)` where appropriate, hash invitation tokens before storing them, deny anonymous access, and allow users to read only active memberships that include their own user ID. Allow role changes only through server-side controlled operations.
+Use unique constraints for `(tenant_id, lower(email), status)` where appropriate, hash invitation tokens before storing them, deny anonymous access, and allow users to read only active memberships that include their own user ID. Expose invitations through a security-invoker projection without `token_hash`; keep raw invitation storage access controlled. Allow authenticated users to read static role definitions, while role changes and membership-role writes remain server-side controlled operations.
 
 - [ ] **Step 4: Run migration and SQL assertions**
 

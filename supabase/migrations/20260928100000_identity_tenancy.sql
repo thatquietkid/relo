@@ -70,6 +70,12 @@ create unique index if not exists invitations_pending_email_unique
 create index if not exists invitations_tenant_status_idx on public.invitations (tenant_id, status);
 create index if not exists invitations_expiry_idx on public.invitations (expires_at);
 
+create view public.invitation_views
+with (security_invoker = true)
+as
+select id, tenant_id, email, role_key, status, expires_at, accepted_at, invited_by, created_at
+  from public.invitations;
+
 create table if not exists public.audit_logs (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null references public.tenants(id) on delete cascade,
@@ -184,9 +190,16 @@ alter table public.invitations enable row level security;
 alter table public.audit_logs enable row level security;
 alter table public.idempotency_keys enable row level security;
 
+revoke all on table public.tenants, public.memberships, public.roles, public.membership_roles,
+  public.invitations, public.audit_logs, public.idempotency_keys, public.invitation_views
+  from anon, authenticated;
 grant select on public.tenants, public.memberships, public.roles, public.membership_roles,
-  public.invitations, public.audit_logs to authenticated;
+  public.audit_logs to authenticated;
+grant select (id, tenant_id, email, role_key, status, expires_at, accepted_at, invited_by, created_at)
+  on public.invitations to authenticated;
+grant select on public.invitation_views to authenticated;
 grant select, insert on public.idempotency_keys to authenticated;
+grant select, insert, update, delete on public.invitations to service_role;
 
 create policy "members can view same tenant"
   on public.tenants for select to authenticated
@@ -199,6 +212,10 @@ create policy "members can view same tenant memberships"
     and status = 'active'
     and tenant_id = any (public.current_tenant_ids())
   );
+
+create policy "authenticated users can view roles"
+  on public.roles for select to authenticated
+  using (true);
 
 create policy "members can view assigned roles"
   on public.membership_roles for select to authenticated
