@@ -5,8 +5,12 @@ import Fastify, {
 } from 'fastify';
 import { ApiError } from './shared/errors.js';
 import { MAX_BODY_SIZE, sendError } from './shared/http.js';
+import { registerAuthRoutes, type AuthRouteDependencies } from './identity/auth-routes.js';
+import { registerOAuthRoutes, type OAuthRouteDependencies } from './oauth/routes.js';
 
-export function createApp(options: FastifyServerOptions = {}): FastifyInstance {
+export interface AppDependencies extends AuthRouteDependencies, OAuthRouteDependencies {}
+
+export function createApp(options: FastifyServerOptions = {}, dependencies: AppDependencies = {}): FastifyInstance {
   const app = Fastify({
     ...options,
     bodyLimit: Math.min(options.bodyLimit ?? MAX_BODY_SIZE, MAX_BODY_SIZE),
@@ -20,6 +24,9 @@ export function createApp(options: FastifyServerOptions = {}): FastifyInstance {
   });
 
   app.get('/healthz', async () => ({ status: 'ok' }));
+
+  registerAuthRoutes(app, dependencies);
+  registerOAuthRoutes(app, dependencies);
 
   app.setNotFoundHandler((request, reply) => {
     const error = new ApiError(404, 'NOT_FOUND', 'The requested resource was not found.');

@@ -1,0 +1,64 @@
+import { describe, expect, it, vi } from 'vitest';
+import { makeConsentService } from '../src/oauth/consent-service.js';
+import type { SupabaseOAuthPort } from '../src/identity/supabase.js';
+
+const identity = {
+  user: { id: 'user-1', email: 'employee@example.com' },
+  memberships: [],
+};
+
+function fakeOAuth(): SupabaseOAuthPort {
+  return {
+    getAuthorizationDetails: vi.fn().mockResolvedValue({
+      data: { authorization_id: 'auth-1', client_name: 'Move App', scopes: ['profile'] },
+      error: null,
+    }),
+    approveAuthorization: vi.fn().mockResolvedValue({ data: { redirect_url: 'https://client.example/cb' }, error: null }),
+    denyAuthorization: vi.fn().mockResolvedValue({ data: { redirect_url: 'https://client.example/denied' }, error: null }),
+  };
+}
+
+describe('OAuth consent service', () => {
+  it('denies an OAuth consent request without an authenticated Relo identity', async () => {
+    const oauth = makeConsentService({ supabase: fakeOAuth() });
+
+    await expect(oauth.getAuthorizationDetails(null, 'auth-1'))
+      .rejects.toMatchObject({ code: 'AUTHENTICATION_REQUIRED' });
+  });
+
+  it('delegates authorization details only for the logged-in Relo identity', async () => {
+    const supabase = fakeOAuth();
+    supabase.getAuthorizationDetails = vi.fn().mockResolvedValue({
+      data: {
+        authorization_id: 'auth-1',
+        client: { name: 'Move App', uri: 'https://move.example' },
+        redirect_uri: 'https://client.example/cb',
+        scope: 'openid email',
+      },
+      error: null,
+    });
+    const oauth = makeConsentService({ supabase });
+
+    await expect(oauth.getAuthorizationDetails(identity, 'auth-1')).resolves.toEqual({
+      authorization_id: 'auth-1',
+      client: { name: 'Move App', uri: 'https://move.example' },
+      redirect_uri: 'https://client.example/cb',
+      scope: 'openid email',
+    });
+    expect(supabase.getAuthorizationDetails).toHaveBeenCalledWith('auth-1');
+  });
+
+  it('delegates approve and deny decisions and returns safe redirect metadata', async () => {
+    const supabase = fakeOAuth();
+    const oauth = makeConsentService({ supabase });
+
+    await expect(oauth.approveAuthorization(identity, 'auth-1')).resolves.toEqual({
+      redirectUrl: 'https://client.example/cb',
+    });
+    await expect(oauth.denyAuthorization(identity, 'auth-1')).resolves.toEqual({
+      redirectUrl: 'https://client.example/denied',
+    });
+    expect(supabase.approveAuthorization).toHaveBeenCalledWith('auth-1');
+    expect(supabase.denyAuthorization).toHaveBeenCalledWith('auth-1');
+  });
+});
