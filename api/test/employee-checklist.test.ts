@@ -25,7 +25,7 @@ const timestamps = {
   updated: '2026-09-28T00:00:00.000Z',
 };
 
-function membership(userId: string, tenantId: string): MembershipView {
+function membership(userId: string, tenantId: string, roleKeys: string[] = ['employee']): MembershipView {
   return {
     id: `membership-${userId}`,
     tenant_id: tenantId,
@@ -34,14 +34,14 @@ function membership(userId: string, tenantId: string): MembershipView {
     joined_at: timestamps.created,
     suspended_at: null,
     tenant: { id: tenantId, name: 'Acme', slug: 'acme', status: 'active' },
-    roles: [{ id: 'role-employee', key: 'employee' }],
+    roles: roleKeys.map((key) => ({ id: `role-${key}`, key })),
   };
 }
 
-function identity(userId = 'employee-a', tenantId = 'tenant-a'): IdentityContext {
+function identity(userId = 'employee-a', tenantId = 'tenant-a', roleKeys = ['employee']): IdentityContext {
   return {
     user: { id: userId, email: `${userId}@example.com` },
-    memberships: [membership(userId, tenantId)],
+    memberships: [membership(userId, tenantId, roleKeys)],
   };
 }
 
@@ -195,6 +195,25 @@ function services(repository: InMemoryEmployeeRepository) {
 
 
 describe('employee relocation case and checklist services', () => {
+  it('allows an active employee membership to access the relocation case', async () => {
+    const repository = new InMemoryEmployeeRepository();
+    const { caseService } = services(repository);
+
+    await expect(caseService.getMyRelocationCase(identity())).resolves.toMatchObject({ id: 'case-a' });
+  });
+
+  it.each([
+    ['hr', ['hr']],
+    ['admin', ['admin']],
+    ['reviewer', ['reviewer']],
+  ])('denies an active %s-only membership from employee journey services', async (_role, roles) => {
+    const repository = new InMemoryEmployeeRepository();
+    const { checklistService } = services(repository);
+
+    await expect(checklistService.listChecklist(identity('employee-a', 'tenant-a', roles), 'case-a'))
+      .rejects.toMatchObject({ statusCode: 403, code: 'ROLE_REQUIRED' });
+  });
+
   it('activates a draft case once, generates defaults, and emits one activation event', async () => {
     const repository = new InMemoryEmployeeRepository([relocationCase({ status: 'draft' })], []);
     const { caseService } = services(repository);

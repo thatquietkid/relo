@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { DomainEvent } from '@relo/contracts/events';
-import { assertMembershipActive } from '../authorization/policy.js';
+import { assertMembershipActive, hasRole } from '../authorization/policy.js';
 import { ApiError } from '../shared/errors.js';
 import type { IdentityContext } from '../identity/types.js';
 import type { MembershipView } from '../tenancy/types.js';
@@ -118,11 +118,15 @@ export function selectEmployeeMembership(identity: IdentityContext): MembershipV
   const activeMemberships = membershipsForUser.filter(
     (membership) => membership.status === 'active' && membership.tenant.status === 'active',
   );
+  const employeeMemberships = activeMemberships.filter((membership) => hasRole(membership, ['employee']));
 
-  if (activeMemberships.length > 1) {
+  if (employeeMemberships.length > 1) {
     throw new ApiError(400, 'TENANT_SELECTION_REQUIRED', 'Select a tenant before continuing.');
   }
-  if (activeMemberships.length === 1) return activeMemberships[0];
+  if (employeeMemberships.length === 1) return employeeMemberships[0];
+  if (activeMemberships.length > 0) {
+    throw new ApiError(403, 'ROLE_REQUIRED', 'The required role is not assigned.');
+  }
 
   const membership = membershipsForUser[0];
   if (membership) assertMembershipActive(membership);
