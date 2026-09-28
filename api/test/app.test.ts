@@ -3,7 +3,9 @@ import { createApp } from '../src/app.js';
 
 describe('API foundation', () => {
   it('exposes a health response and stable error shape', async () => {
-    const app = await createApp({ logger: false });
+    const app = createApp({ logger: false });
+
+    expect(typeof app.inject).toBe('function');
 
     const health = await app.inject({ method: 'GET', url: '/healthz' });
     expect(health.statusCode).toBe(200);

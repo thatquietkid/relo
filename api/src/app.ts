@@ -6,10 +6,10 @@ import Fastify, {
 } from 'fastify';
 import { ApiError, toApiErrorResponse } from './shared/errors.js';
 
-export async function createApp(options: FastifyServerOptions = {}): Promise<FastifyInstance> {
+export function createApp(options: FastifyServerOptions = {}): FastifyInstance {
   const app = Fastify(options);
 
-  await app.register(sensible);
+  app.register(sensible);
 
   app.addHook('onRequest', async (request, reply) => {
     reply.header('X-Request-Id', request.id);

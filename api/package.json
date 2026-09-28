@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/server.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

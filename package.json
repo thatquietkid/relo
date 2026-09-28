@@ -9,11 +9,15 @@
   ],
   "scripts": {
     "test": "vitest run",
+    "test:legacy": "node --test backend/*.test.js prototype/*.test.js",
     "typecheck": "tsc --noEmit -p tsconfig.base.json"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "vitest": "^2.1.8",
     "typescript": "^5.7.2"
+  },
+  "allowScripts": {
+    "esbuild@0.21.5": true
   }
 }
