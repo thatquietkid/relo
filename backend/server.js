@@ -2,13 +2,11 @@ import http from 'node:http';
 import { createClient } from '@supabase/supabase-js';
 import { isAdminRole, normalizeAdminEventQuery, toAdminEventView } from './admin-events.js';
 import { normalizeAdminUserInput } from './admin-users.js';
+import { loadSupabaseConfig } from './config.js';
 
 const port = Number(process.env.PORT || 4100);
 const host = process.env.HOST || '0.0.0.0';
 const maxBodyBytes = 64 * 1024;
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 function json(res, status, payload, extraHeaders = {}) {
   res.writeHead(status, {
@@ -29,18 +27,16 @@ function corsHeaders() {
 }
 
 function publicClient(accessToken) {
-  if (!supabaseUrl || !supabaseKey) throw Object.assign(new Error('Supabase is not configured'), { statusCode: 503 });
-  return createClient(supabaseUrl, supabaseKey, {
+  const config = loadSupabaseConfig(process.env, { requireServiceRole: false });
+  return createClient(config.url, config.publishableKey, {
     auth: { autoRefreshToken: false, persistSession: false },
     global: accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : undefined
   });
 }
 
 function adminClient() {
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    throw Object.assign(new Error('Supabase admin provisioning is not configured'), { statusCode: 503 });
-  }
-  return createClient(supabaseUrl, supabaseServiceRoleKey, {
+  const config = loadSupabaseConfig(process.env);
+  return createClient(config.url, config.serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false }
   });
 }

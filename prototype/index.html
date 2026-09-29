@@ -1,21 +1,42 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Relo relocation onboarding prototype" />
-    <meta name="theme-color" content="#12333c" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="icon" type="image/svg+xml" href="/relo-logo.svg" />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <title>Relo — relocation, made easier</title>
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body>
-    <div id="app" class="app-shell"></div>
-    <script src="/config.js"></script>
-    <script src="/oauth-consent.js"></script>
-    <script src="/app.js"></script>
-  </body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relo Prototype</title>
+    <link rel="icon" type="image/svg+xml" href="/relo-logo.svg">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="logo-container">
+            <img src="relo-logo.svg" alt="Relo Logo" class="logo">
+            <span class="brand-name">Relo</span>
+        </div>
+        <div class="role-switcher">
+            <label for="role-select">View as:</label>
+            <select id="role-select">
+                <option value="employee">Employee</option>
+                <option value="hr">HR Admin</option>
+            </select>
+        </div>
+    </header>
+
+    <main id="app-content">
+        <!-- Content injected by app.js -->
+    </main>
+
+    <nav id="app-nav" class="app-nav">
+        <!-- Navigation injected by app.js -->
+    </nav>
+
+    <div id="modal-container" class="modal-overlay hidden">
+        <div class="modal-content">
+            <button class="close-modal">&times;</button>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
 </html>
