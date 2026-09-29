@@ -1,5 +1,5 @@
-import { useEffect, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { type ReactNode } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../app/auth/AuthProvider';
 
 const rolePermissions: Record<string, string[]> = {
@@ -22,19 +22,17 @@ function can(identity: ReturnType<typeof useAuth>['identity'], permission: strin
 
 export function ProtectedRoute({ permission, children }: { permission: string; children: ReactNode }) {
   const auth = useAuth();
-
-  useEffect(() => {
-    if (auth.status === 'unauthenticated' && window.location.pathname !== '/login') {
-      sessionStorage.setItem('relo.returnTo', `${window.location.pathname}${window.location.search}`);
-      window.history.replaceState({}, '', '/login');
-    }
-  }, [auth.status]);
+  const location = useLocation();
 
   if (auth.status === 'loading') {
     return <div className="route-state" role="status">Checking your session</div>;
   }
   if (auth.status === 'unauthenticated') {
-    return <div className="route-state"><h1>Sign in to continue</h1><p>Your Relo workspace is protected.</p><Link className="button button-dark" to="/login">Sign in</Link></div>;
+    if (sessionStorage.getItem('relo.signingOut') === 'true') {
+      return <Navigate to="/login" replace />;
+    }
+    const returnTo = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to={`/login?returnTo=${encodeURIComponent(returnTo)}`} replace />;
   }
   if (!can(auth.identity, permission)) {
     return <div className="route-state"><h1>Access not available</h1><p>Your current Relo membership does not include this workspace.</p></div>;

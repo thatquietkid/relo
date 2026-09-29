@@ -12,18 +12,22 @@ export function ExplorePage() {
   const [category, setCategory] = useState('');
   const [preview, setPreview] = useState<client.ProviderRequestPreview | null>(null);
   const [message, setMessage] = useState('');
-  const [cityId, setCityId] = useState('destination');
-  const [loading, setLoading] = useState(false);
+  const [cityId, setCityId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [busyEntryId, setBusyEntryId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session) return;
     void client.getEmployeeCase(session.accessToken)
       .then((result) => setCityId(result.relocation.destination_city_id))
-      .catch(() => undefined);
+      .catch(() => {
+        setMessage('Your destination is unavailable right now.');
+        setLoading(false);
+      });
   }, [session]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || !cityId) return;
     setLoading(true);
     void Promise.all([
       client.getDirectory(session.accessToken, { cityId, query, category }),
@@ -32,6 +36,7 @@ export function ExplorePage() {
       .then(([dirResult, shortlistResult]) => {
         setEntries(dirResult.items);
         setSaved(new Set(shortlistResult.shortlist.map((item) => item.directoryEntryId)));
+        setMessage('');
       })
       .catch(() => setMessage('Explore is unavailable right now.'))
       .finally(() => setLoading(false));
@@ -44,26 +49,37 @@ export function ExplorePage() {
 
   async function toggleSave(entry: client.DirectoryEntry) {
     if (!session) return;
-    if (saved.has(entry.id)) {
-      await client.removeShortlist(session.accessToken, entry.id);
-    } else {
-      await client.saveShortlist(session.accessToken, entry.id);
+    if (busyEntryId) return;
+    const wasSaved = saved.has(entry.id);
+    setBusyEntryId(entry.id);
+    setMessage('');
+    try {
+      if (wasSaved) await client.removeShortlist(session.accessToken, entry.id);
+      else await client.saveShortlist(session.accessToken, entry.id);
+      setSaved((current) => {
+        const next = new Set(current);
+        if (wasSaved) next.delete(entry.id);
+        else next.add(entry.id);
+        return next;
+      });
+      setMessage(wasSaved ? 'Removed from saved' : 'Saved for later');
+    } catch {
+      setMessage(wasSaved ? 'Could not remove this service from saved.' : 'Could not save this service. Please try again.');
+    } finally {
+      setBusyEntryId(null);
     }
-    setSaved((current) => {
-      const next = new Set(current);
-      if (next.has(entry.id)) next.delete(entry.id);
-      else next.add(entry.id);
-      return next;
-    });
-    setMessage(saved.has(entry.id) ? 'Removed from saved' : 'Saved for later');
   }
 
   async function requestSupport(entry: client.DirectoryEntry) {
-    if (!session) return;
+    if (!session || busyEntryId) return;
+    setBusyEntryId(entry.id);
+    setMessage('');
     try {
       setPreview((await client.getProviderRequestPreview(session.accessToken, entry.id)).preview);
     } catch {
       setMessage('This provider request is not available right now.');
+    } finally {
+      setBusyEntryId(null);
     }
   }
 
@@ -135,6 +151,7 @@ export function ExplorePage() {
               key={entry.id}
               entry={entry}
               saved={saved.has(entry.id)}
+              disabled={busyEntryId === entry.id}
               onSave={() => void toggleSave(entry)}
               onRequest={() => void requestSupport(entry)}
             />

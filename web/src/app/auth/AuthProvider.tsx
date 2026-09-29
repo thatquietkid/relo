@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as client from './auth-client';
 import type { DemoPortal, WebIdentity, WebSession } from './auth-client';
 
@@ -8,8 +9,8 @@ export interface AuthContextValue {
   identity: WebIdentity | null;
   status: AuthStatus;
   requestOtp: (email: string) => Promise<void>;
-  verifyOtp: (email: string, token: string) => Promise<void>;
-  signInDemo: (portal: DemoPortal) => Promise<void>;
+  verifyOtp: (email: string, token: string) => Promise<WebIdentity>;
+  signInDemo: (portal: DemoPortal) => Promise<WebIdentity>;
   signInWithGoogle: () => Promise<void>;
   refreshIdentity: () => Promise<void>;
   completeOAuthCallback: (session: WebSession) => Promise<void>;
@@ -38,9 +39,10 @@ function storeSession(session: WebSession | null): void {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<WebSession | null>(null);
+  const navigate = useNavigate();
+  const [session, setSession] = useState<WebSession | null>(() => readStoredSession());
   const [identity, setIdentity] = useState<WebIdentity | null>(null);
-  const [status, setStatus] = useState<AuthStatus>('loading');
+  const [status, setStatus] = useState<AuthStatus>(() => session ? 'loading' : 'unauthenticated');
 
   useEffect(() => {
     const stored = readStoredSession();
@@ -71,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(result.session);
     setIdentity(nextIdentity);
     setStatus('authenticated');
+    return nextIdentity;
   }, []);
 
   const signInDemo = useCallback(async (portal: DemoPortal) => {
@@ -79,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(result.session);
     setIdentity(result.identity);
     setStatus('authenticated');
+    return result.identity;
   }, []);
 
   const refreshIdentity = useCallback(async () => {
@@ -105,15 +109,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     const current = session;
     storeSession(null);
+    sessionStorage.removeItem('relo.returnTo');
+    sessionStorage.setItem('relo.signingOut', 'true');
     setSession(null);
     setIdentity(null);
+    navigate('/login', { replace: true });
     setStatus('unauthenticated');
     try {
       if (current) await client.logout(current.accessToken);
     } catch {
       // Local sign-out is authoritative for the browser even if the upstream call fails.
     }
-  }, [session]);
+  }, [navigate, session]);
 
   const value = useMemo(() => ({ session, identity, status, requestOtp, verifyOtp, signInDemo, signInWithGoogle, refreshIdentity, completeOAuthCallback, signOut }), [
     session, identity, status, requestOtp, verifyOtp, signInDemo, signInWithGoogle, refreshIdentity, completeOAuthCallback, signOut,

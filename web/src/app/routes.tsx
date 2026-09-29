@@ -28,7 +28,6 @@ const navByRole: Record<string, Array<[string, string, string]>> = {
   admin: [
     ['/admin', '◈', 'Events'],
     ['/admin/users', '♙', 'Users'],
-    ['/admin/security', '♡', 'Security'],
   ],
   platform_admin: [
     ['/admin/tenants', '⌂', 'Tenants'],

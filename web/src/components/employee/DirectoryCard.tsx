@@ -3,11 +3,12 @@ import type { DirectoryEntry } from '../../app/auth/auth-client';
 interface DirectoryCardProps {
   entry: DirectoryEntry;
   saved?: boolean;
+  disabled?: boolean;
   onSave?: () => void;
   onRequest?: () => void;
 }
 
-export function DirectoryCard({ entry, saved = false, onSave, onRequest }: DirectoryCardProps) {
+export function DirectoryCard({ entry, saved = false, disabled = false, onSave, onRequest }: DirectoryCardProps) {
   return (
     <article className="directory-card">
       <div className="directory-card-top">
@@ -16,6 +17,7 @@ export function DirectoryCard({ entry, saved = false, onSave, onRequest }: Direc
           <button
             className={`icon-button${saved ? ' is-saved' : ''}`}
             type="button"
+            disabled={disabled}
             aria-label={`${saved ? 'Remove' : 'Save'} ${entry.title}`}
             onClick={onSave}
             title={saved ? 'Saved — click to remove' : 'Save for later'}
@@ -35,7 +37,7 @@ export function DirectoryCard({ entry, saved = false, onSave, onRequest }: Direc
       </div>
       <div className="directory-actions">
         {onRequest && (
-          <button className="button button-primary button-small" type="button" onClick={onRequest}>
+          <button className="button button-primary button-small" type="button" disabled={disabled} onClick={onRequest}>
             Request support
           </button>
         )}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { OtpVerifyPage } from './OtpVerifyPage';
 import { useAuth } from '../../app/auth/AuthProvider';
 import type { DemoPortal } from '../../app/auth/auth-client';
+import { returnPathForWorkspace, workspaceHomePath } from '../../app/auth/workspace-routing';
 
 const demoPortals: Array<{ key: DemoPortal; label: string }> = [
   { key: 'employee', label: 'Employee portal' },
@@ -31,8 +32,10 @@ export function LoginPage() {
   const showDemoAccess = isDemoAccessVisible();
 
   useEffect(() => {
+    sessionStorage.removeItem('relo.signingOut');
     const returnTo = new URLSearchParams(window.location.search).get('returnTo');
     if (returnTo?.startsWith('/') && !returnTo.startsWith('//')) sessionStorage.setItem('relo.returnTo', returnTo);
+    else sessionStorage.removeItem('relo.returnTo');
   }, []);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -56,7 +59,7 @@ export function LoginPage() {
       await signInDemo(portal);
       const returnTo = sessionStorage.getItem('relo.returnTo');
       sessionStorage.removeItem('relo.returnTo');
-      navigate(returnTo?.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/');
+      navigate(returnPathForWorkspace(returnTo, portal) ?? workspaceHomePath(portal), { replace: true });
     } catch (cause) {
       setDemoError(cause instanceof Error ? cause.message : 'We could not open the demo portal.');
     } finally {

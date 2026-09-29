@@ -6,13 +6,18 @@ export function RequestsPage() {
   const { session } = useAuth();
   const [requests, setRequests] = useState<client.ProviderRequest[]>([]);
   const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (session) {
-      void client.getProviderRequests(session.accessToken)
-        .then((result) => setRequests(result.requests))
-        .catch(() => setMessage('Requests are unavailable right now.'));
-    }
+    if (!session) return;
+    setLoading(true);
+    void client.getProviderRequests(session.accessToken)
+      .then((result) => {
+        setRequests(result.requests);
+        setMessage('');
+      })
+      .catch(() => setMessage('Requests are unavailable right now.'))
+      .finally(() => setLoading(false));
   }, [session]);
 
   async function withdraw(id: string) {
@@ -39,7 +44,11 @@ export function RequestsPage() {
       {message && <div className="status-line" role="status">{message}</div>}
 
       <section className="request-list stagger" aria-label="Provider requests">
-        {requests.length === 0
+        {loading
+          ? <div className="panel empty-state"><h2>Loading requests…</h2><p>Fetching your provider introductions.</p></div>
+          : message === 'Requests are unavailable right now.'
+            ? <div className="panel empty-state"><h2>Requests are unavailable</h2><p>Please try again in a moment.</p></div>
+            : requests.length === 0
           ? (
             <div className="panel empty-state">
               <h2>No requests yet.</h2>
@@ -49,7 +58,7 @@ export function RequestsPage() {
           : requests.map((request) => (
             <article className="request-row" key={request.id}>
               <div>
-                <span className="category-pill">{request.status}</span>
+                <span className="category-pill">{request.status.replaceAll('_', ' ')}</span>
                 <h2>{request.entry.title}</h2>
                 <p>{request.entry.providerName} · {request.entry.cityName}</p>
               </div>

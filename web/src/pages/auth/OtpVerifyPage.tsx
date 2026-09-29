@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../app/auth/AuthProvider';
+import { returnPathForWorkspace, workspaceHomePath, workspaceRoleForIdentity } from '../../app/auth/workspace-routing';
 
 export function OtpVerifyPage({ email, onBack }: { email: string; onBack?: () => void }) {
   const { verifyOtp } = useAuth();
+  const navigate = useNavigate();
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -12,12 +15,11 @@ export function OtpVerifyPage({ email, onBack }: { email: string; onBack?: () =>
     setBusy(true);
     setError(null);
     try {
-      await verifyOtp(email, code);
+      const identity = await verifyOtp(email, code);
       const storedReturnTo = sessionStorage.getItem('relo.returnTo');
-      const returnTo = storedReturnTo?.startsWith('/') && !storedReturnTo.startsWith('//') ? storedReturnTo : null;
       sessionStorage.removeItem('relo.returnTo');
-      window.history.replaceState({}, '', returnTo || '/');
-      window.dispatchEvent(new PopStateEvent('popstate'));
+      const role = workspaceRoleForIdentity(identity);
+      navigate(returnPathForWorkspace(storedReturnTo, role) ?? workspaceHomePath(role), { replace: true });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The email code is invalid or expired.');
     } finally {

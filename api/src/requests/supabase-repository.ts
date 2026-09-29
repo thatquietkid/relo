@@ -25,10 +25,10 @@ function mapCase(value: unknown): RelocationCaseContext {
   return { id: String(row.id), tenantId: String(row.tenant_id), employeeUserId: String(row.employee_user_id), destinationCityId: String(row.destination_city_id), destinationCityName: String(row.destination_city_name ?? ''), moveDate: String(row.move_date), status: row.status as RelocationCaseContext['status'] };
 }
 
-function mapRequest(value: unknown, entry: RequestEntryRecord): ProviderRequestView {
+function mapRequest(value: unknown, entry: RequestEntryRecord, userId: string, tenantId: string): ProviderRequestView {
   if (!value || typeof value !== 'object') throw repositoryError();
   const row = value as Record<string, unknown>;
-  return { id: String(row.id), userId: String(row.user_id), tenantId: String(row.tenant_id), caseId: String(row.case_id), entryId: String(row.directory_entry_id), status: row.status as ProviderRequestView['status'], submittedAt: typeof row.submitted_at === 'string' ? row.submitted_at : null, withdrawnAt: typeof row.withdrawn_at === 'string' ? row.withdrawn_at : null, createdAt: String(row.created_at), updatedAt: String(row.updated_at), entry };
+  return { id: String(row.id), userId, tenantId, caseId: String(row.case_id), entryId: String(row.directory_entry_id), status: row.status as ProviderRequestView['status'], submittedAt: typeof row.submitted_at === 'string' ? row.submitted_at : null, withdrawnAt: typeof row.withdrawn_at === 'string' ? row.withdrawn_at : null, createdAt: String(row.created_at), updatedAt: String(row.updated_at), entry };
 }
 
 function mapError(error: unknown): ApiError {
@@ -64,12 +64,16 @@ export function makeSupabaseProviderRequestRepository(client: ReturnType<typeof 
       return result.data ? mapEntry(result.data) : null;
     },
     async listRequests(userId, tenantId) {
-      const result = await client.from('provider_requests').select('id, user_id, tenant_id, case_id, directory_entry_id, status, submitted_at, withdrawn_at, created_at, updated_at').eq('user_id', userId).eq('tenant_id', tenantId).order('created_at', { ascending: false });
+      const cases = await client.from('relocation_cases').select('id').eq('employee_user_id', userId).eq('tenant_id', tenantId).neq('status', 'cancelled');
+      if (cases.error) throw mapError(cases.error);
+      const caseIds = (cases.data ?? []).map((row) => String((row as Record<string, unknown>).id));
+      if (caseIds.length === 0) return [];
+      const result = await client.from('provider_requests').select('id, case_id, directory_entry_id, status, submitted_at, withdrawn_at, created_at, updated_at').in('case_id', caseIds).order('created_at', { ascending: false });
       if (result.error) throw mapError(result.error);
       const requests: ProviderRequestView[] = [];
       for (const row of result.data ?? []) {
         const entry = await this.getEntry(String((row as Record<string, unknown>).directory_entry_id));
-        if (entry) requests.push(mapRequest(row, entry));
+        if (entry) requests.push(mapRequest(row, entry, userId, tenantId));
       }
       return requests;
     },
@@ -82,7 +86,7 @@ export function makeSupabaseProviderRequestRepository(client: ReturnType<typeof 
       const row = result.data as { provider_request?: unknown } | null;
       const entry = await this.getEntry(input.entryId);
       if (!entry || !row?.provider_request) throw repositoryError();
-      return mapRequest(row.provider_request, entry);
+      return mapRequest(row.provider_request, entry, input.userId, input.tenantId);
     },
     async withdrawRequest(input: WithdrawRequestCommand) {
       const result = await client.rpc('employee_withdraw_provider_request', { p_user_id: input.userId, p_tenant_id: input.tenantId, p_request_id: input.requestId, p_trace_id: input.traceId });
@@ -96,7 +100,7 @@ export function makeSupabaseProviderRequestRepository(client: ReturnType<typeof 
       const requestRow = row.provider_request as Record<string, unknown>;
       const entry = await this.getEntry(String(requestRow.directory_entry_id));
       if (!entry) throw repositoryError();
-      return mapRequest(requestRow, entry);
+      return mapRequest(requestRow, entry, input.userId, input.tenantId);
     },
   };
 }
