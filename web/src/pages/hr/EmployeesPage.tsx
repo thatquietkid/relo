@@ -1,2 +1,13 @@
-import { useAuth } from '../../app/auth/AuthProvider';
-export function EmployeesPage() { const { identity } = useAuth(); return <div className="page-content operations-page"><div className="page-heading"><div><p className="eyebrow">HR workspace</p><h1>Employees</h1></div><p>Invite employees only. Administrator and HR access stays controlled outside the public portal.</p></div><section className="panel empty-state"><h2>Employee directory</h2><p>Employee records will appear here for {identity?.memberships[0]?.tenant.name ?? 'your workspace'} after the API is connected.</p><button className="button button-primary" type="button">Invite employee</button></section></div>; }
+import { InviteUsersPanel } from '../../components/InviteUsersPanel';
+
+export function EmployeesPage() {
+  return (
+    <div className="page-content operations-page">
+      <div className="page-heading">
+        <div><p className="eyebrow">HR workspace</p><h1>Employees.</h1></div>
+        <p>Invite employees and follow the people who have joined your relocation programme.</p>
+      </div>
+      <InviteUsersPanel />
+    </div>
+  );
+}

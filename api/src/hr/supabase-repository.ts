@@ -12,13 +12,13 @@ function mapEmployee(value: unknown): EmployeeSummary {
 function mapInvitation(value: unknown): InvitationRecord {
   if (!value || typeof value !== 'object') throw repositoryError();
   const row = value as Record<string, unknown>;
-  return { id: String(row.id), tenantId: String(row.tenant_id), email: String(row.email), roleKey: 'employee', status: row.status as InvitationRecord['status'], expiresAt: String(row.expires_at), acceptedAt: typeof row.accepted_at === 'string' ? row.accepted_at : null, invitedBy: typeof row.invited_by === 'string' ? row.invited_by : null, createdAt: String(row.created_at) };
+  return { id: String(row.id), tenantId: String(row.tenant_id), email: String(row.email), roleKey: row.role_key === 'hr' ? 'hr' : 'employee', status: row.status as InvitationRecord['status'], expiresAt: String(row.expires_at), acceptedAt: typeof row.accepted_at === 'string' ? row.accepted_at : null, invitedBy: typeof row.invited_by === 'string' ? row.invited_by : null, createdAt: String(row.created_at) };
 }
 
 function mapError(error: unknown): ApiError {
   const message = typeof (error as { message?: unknown })?.message === 'string' ? String((error as { message: string }).message) : '';
   if (message.includes('HR_ACCESS_DENIED')) return new ApiError(403, 'ROLE_REQUIRED', 'An active HR membership is required.');
-  if (message.includes('ROLE_NOT_ALLOWED')) return new ApiError(403, 'ROLE_NOT_ALLOWED', 'HR can only invite employees.');
+  if (message.includes('ROLE_NOT_ALLOWED')) return new ApiError(403, 'ROLE_NOT_ALLOWED', 'This invitation role is not allowed for your account.');
   if (message.includes('INVITATION_ALREADY_PENDING')) return new ApiError(409, 'INVITATION_ALREADY_PENDING', 'An active invitation already exists for this email.');
   if (message.includes('INVITATION_RESEND_RATE_LIMITED')) return new ApiError(429, 'INVITATION_RESEND_RATE_LIMITED', 'Please wait before resending this invitation.');
   if (message.includes('INVITATION_NOT_FOUND')) return new ApiError(404, 'NOT_FOUND', 'The invitation was not found.');
@@ -44,7 +44,7 @@ export function makeSupabaseHrRepository(client: ReturnType<typeof createSupabas
       return result.data ? mapInvitation(result.data) : null;
     },
     async createInvitation(input) {
-      const result = await client.rpc('hr_create_employee_invitation', { p_tenant_id: input.tenantId, p_email: input.email, p_created_by: input.invitedBy, p_expires_at: input.expiresAt, p_token_hash: input.tokenHash });
+      const result = await client.rpc('hr_create_tenant_invitation', { p_tenant_id: input.tenantId, p_email: input.email, p_created_by: input.invitedBy, p_role_key: input.roleKey, p_expires_at: input.expiresAt, p_token_hash: input.tokenHash });
       if (result.error) throw mapError(result.error);
       return mapInvitation(result.data);
     },

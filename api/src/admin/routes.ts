@@ -7,9 +7,52 @@ import { createSupabaseClient, type SupabaseClientConfig } from '../identity/sup
 
 export interface AdminRouteDependencies extends AuthorizationDependencies { adminEventsRepository?: AdminEventsRepository; createAdminEventsRepository?: (accessToken: string) => AdminEventsRepository; }
 export interface AdminEvent { id: string; action: string; resourceType: string; resourceId: string | null; createdAt: string; metadata: Record<string, unknown>; }
-export interface AdminEventsRepository { listEvents(input: { page: number; pageSize: number; from?: string; to?: string }): Promise<{ items: AdminEvent[]; total: number }>; }
+export interface AdminEventsRepository { listEvents(input: { page: number; pageSize: number; from?: string; to?: string; resourceType?: string }): Promise<{ items: AdminEvent[]; total: number }>; }
 function unavailable(): ApiError { return new ApiError(503, 'ADMIN_DATA_UNAVAILABLE', 'Administration data is unavailable.'); }
 function token(request: FastifyRequest): string { const value = request.headers.authorization; return typeof value === 'string' && value.startsWith('Bearer ') ? value.slice(7).trim() : ''; }
-function repositoryForRequest(deps: AdminRouteDependencies, request: FastifyRequest): AdminEventsRepository { if (deps.adminEventsRepository) return deps.adminEventsRepository; const url = process.env.SUPABASE_URL; const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY; const accessToken = token(request); if (!url || !publishableKey || !accessToken) throw unavailable(); const config: SupabaseClientConfig = { url, publishableKey, accessToken }; const client = createSupabaseClient(config); return { async listEvents(input) { let query = client.from('audit_logs').select('id, action, resource_type, resource_id, created_at, metadata', { count: 'exact' }).order('created_at', { ascending: false }).range((input.page - 1) * input.pageSize, input.page * input.pageSize - 1); if (input.from) query = query.gte('created_at', input.from); if (input.to) query = query.lt('created_at', input.to); const result = await query; if (result.error) throw unavailable(); return { items: (result.data ?? []).map((row) => ({ id: String(row.id), action: String(row.action), resourceType: String(row.resource_type), resourceId: typeof row.resource_id === 'string' ? row.resource_id : null, createdAt: String(row.created_at), metadata: row.metadata as Record<string, unknown> })), total: result.count ?? 0 }; } }; }
-const querySchema = z.object({ page: z.coerce.number().int().positive().default(1), pageSize: z.coerce.number().int().positive().max(100).default(20), from: z.string().datetime().optional(), to: z.string().datetime().optional() });
-export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDependencies = {}): void { const hooks = makeAuthorizationHooks({ authService: deps.authService, createSupabasePort: deps.createSupabasePort }); const role = requireRole('admin'); app.get('/api/v1/admin/events', { preHandler: [hooks.requireAuth, role] }, async (request) => { const parsed = querySchema.safeParse(request.query); if (!parsed.success) throw new ApiError(400, 'VALIDATION_ERROR', 'The admin event query is invalid.'); return repositoryForRequest(deps, request).listEvents(parsed.data); }); }
+function repositoryForRequest(deps: AdminRouteDependencies, request: FastifyRequest): AdminEventsRepository {
+  if (deps.adminEventsRepository) return deps.adminEventsRepository;
+  const url = process.env.SUPABASE_URL;
+  const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+  const accessToken = token(request);
+  if (!url || !publishableKey || !accessToken) throw unavailable();
+  const config: SupabaseClientConfig = { url, publishableKey, accessToken };
+  const client = createSupabaseClient(config);
+  return {
+    async listEvents(input) {
+      let query = client.from('audit_logs')
+        .select('id, action, resource_type, resource_id, created_at, metadata', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range((input.page - 1) * input.pageSize, input.page * input.pageSize - 1);
+      if (input.from) query = query.gte('created_at', input.from);
+      if (input.to) query = query.lt('created_at', input.to);
+      if (input.resourceType) query = query.eq('resource_type', input.resourceType);
+      const result = await query;
+      if (result.error) throw unavailable();
+      return {
+        items: (result.data ?? []).map((row) => ({
+          id: String(row.id), action: String(row.action), resourceType: String(row.resource_type),
+          resourceId: typeof row.resource_id === 'string' ? row.resource_id : null,
+          createdAt: String(row.created_at), metadata: row.metadata as Record<string, unknown>,
+        })),
+        total: result.count ?? 0,
+      };
+    },
+  };
+}
+const querySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(20),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  resourceType: z.string().trim().min(1).max(120).optional(),
+});
+export function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDependencies = {}): void {
+  const hooks = makeAuthorizationHooks({ authService: deps.authService, createSupabasePort: deps.createSupabasePort });
+  const role = requireRole('admin');
+  app.get('/api/v1/admin/events', { preHandler: [hooks.requireAuth, role] }, async (request) => {
+    const parsed = querySchema.safeParse(request.query);
+    if (!parsed.success) throw new ApiError(400, 'VALIDATION_ERROR', 'The admin event query is invalid.');
+    return repositoryForRequest(deps, request).listEvents(parsed.data);
+  });
+}

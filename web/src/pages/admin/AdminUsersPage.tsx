@@ -1,1 +1,13 @@
-export function AdminUsersPage() { return <div className="page-content operations-page"><div className="page-heading"><div><p className="eyebrow">Tenant administration</p><h1>Users</h1></div><p>Manage tenant membership through controlled, audited workflows.</p></div><section className="panel empty-state"><h2>Membership management</h2><p>Role changes and invitations are intentionally explicit and never available through public registration.</p></section></div>; }
+import { InviteUsersPanel } from '../../components/InviteUsersPanel';
+
+export function AdminUsersPage() {
+  return (
+    <div className="page-content operations-page">
+      <div className="page-heading">
+        <div><p className="eyebrow">Tenant administration</p><h1>People and access.</h1></div>
+        <p>Invite employees and add HR teammates to this tenant. HR access uses the existing role and permissions.</p>
+      </div>
+      <InviteUsersPanel allowHrRole />
+    </div>
+  );
+}

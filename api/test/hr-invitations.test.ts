@@ -12,6 +12,10 @@ const membership: MembershipView = {
   roles: [{ id: 'role-hr', key: 'hr' }],
 };
 const hr: IdentityContext = { user: { id: 'hr-a', email: 'hr@example.com' }, memberships: [membership] };
+const tenantAdmin: IdentityContext = {
+  user: { id: 'admin-a', email: 'admin@example.com' },
+  memberships: [{ ...membership, user_id: 'admin-a', roles: [{ id: 'role-admin', key: 'admin' }] }],
+};
 
 function invitation(overrides: Partial<InvitationRecord> = {}): InvitationRecord {
   return {
@@ -29,7 +33,7 @@ class InMemoryHrRepository implements HrRepository {
   async listEmployees() { return { items: this.employees, total: this.employees.length }; }
   async findActiveInvitation(tenantId: string, email: string) { return this.invitations.find((item) => item.tenantId === tenantId && item.email === email && item.status === 'pending') ?? null; }
   async createInvitation(input: Parameters<NonNullable<HrRepository['createInvitation']>>[0]) {
-    const record = invitation({ id: `invitation-${this.invitations.length + 1}`, tenantId: input.tenantId, email: input.email, invitedBy: input.invitedBy, expiresAt: input.expiresAt });
+    const record = invitation({ id: `invitation-${this.invitations.length + 1}`, tenantId: input.tenantId, email: input.email, roleKey: input.roleKey, invitedBy: input.invitedBy, expiresAt: input.expiresAt });
     this.invitations.push(record);
     return record;
   }
@@ -58,6 +62,24 @@ describe('HR employee invitations', () => {
     expect(result.role).toBe('employee');
     expect(result.email).toBe('new@example.com');
     await expect(service.createEmployeeInvitation(hr, { email: 'admin@example.com', role: 'admin' }, 'invite-0002'))
+      .rejects.toMatchObject({ code: 'ROLE_NOT_ALLOWED' });
+  });
+
+  it('lets tenant admins invite additional HR users with the existing HR role', async () => {
+    const repository = new InMemoryHrRepository();
+    const service = makeHrService({ repository });
+
+    const result = await service.createEmployeeInvitation(tenantAdmin, { email: 'new-hr@example.com', role: 'hr' }, 'invite-hr-0001');
+
+    expect(result.role).toBe('hr');
+    expect(result.email).toBe('new-hr@example.com');
+    expect(result.inviteUrl).toMatch(/^https:\/\/relo-web\.onrender\.com\/invite\//);
+  });
+
+  it('prevents HR users from granting the HR role', async () => {
+    const service = makeHrService({ repository: new InMemoryHrRepository() });
+
+    await expect(service.createEmployeeInvitation(hr, { email: 'new-hr@example.com', role: 'hr' }, 'invite-hr-0002'))
       .rejects.toMatchObject({ code: 'ROLE_NOT_ALLOWED' });
   });
 

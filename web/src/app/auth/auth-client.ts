@@ -201,9 +201,18 @@ export interface AaarrrMetric { key: string; label: string; numerator: number; d
 export interface AaarrrReport { from: string; to: string; generatedAt: string; metrics: Record<string, AaarrrMetric>; activation: AaarrrMetric; acquisition: AaarrrMetric; retention: AaarrrMetric; referral: AaarrrMetric; revenue: AaarrrMetric }
 export const getAaarrrReport = (accessToken: string, from: string, to: string) => request<{ report: AaarrrReport }>(`/api/v1/hr/reports/aarrr?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, {}, accessToken);
 export const requestReportExport = (accessToken: string, from: string, to: string, idempotencyKey: string) => request<{ export: { id: string; status: string; requestedAt: string } }>('/api/v1/hr/reports/exports', { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify({ from, to }) }, accessToken);
+export interface HrEmployeeSummary { membershipId: string; userId: string; email: string; name: string | null; status: string; joinedAt: string; roles: string[] }
+export interface HrInvitation { id: string; tenantId: string; email: string; role: 'employee' | 'hr'; status: 'pending' | 'accepted' | 'expired' | 'revoked'; expiresAt: string; acceptedAt: string | null; invitedBy: string | null; createdAt: string; inviteUrl?: string }
+export const getHrEmployees = (accessToken: string) => request<{ items: HrEmployeeSummary[]; page: number; pageSize: number; total: number; totalPages: number }>('/api/v1/hr/employees?page=1&pageSize=100', {}, accessToken);
+export const createHrInvitation = (accessToken: string, input: { email: string; role: 'employee' | 'hr' }, idempotencyKey: string) => request<{ invitation: HrInvitation }>('/api/v1/hr/invitations', { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(input) }, accessToken);
 export interface ReviewEntry { id: string; providerId: string; cityId: string; cityName: string; category: string; providerName: string; title: string; description: string; sourceUrl: string | null; status: 'draft' | 'published' | 'archived'; publishedAt: string | null; expiresAt: string | null; updatedAt: string }
 export const getReviewQueue = (accessToken: string, status = 'draft') => request<{ items: ReviewEntry[]; page: number; pageSize: number; total: number; totalPages: number }>(`/api/v1/review/queue?status=${encodeURIComponent(status)}`, {}, accessToken);
 export const publishReviewEntry = (accessToken: string, id: string) => request<{ entry: ReviewEntry }>(`/api/v1/review/directory/${encodeURIComponent(id)}/publish`, { method: 'POST' }, accessToken);
 export const unpublishReviewEntry = (accessToken: string, id: string, reason: string) => request<{ entry: ReviewEntry }>(`/api/v1/review/directory/${encodeURIComponent(id)}/unpublish`, { method: 'POST', body: JSON.stringify({ reason }) }, accessToken);
 export const getReviewerSettings = (accessToken: string) => request<{ settings: { cityIds: string[]; categories: string[]; timezone: string; channels: { email: boolean; inApp: boolean } } }>('/api/v1/review/settings', {}, accessToken);
-export const getAdminEvents = (accessToken: string) => request<{ items: Array<{ id: string; action: string; resourceType: string; createdAt: string }>; total: number }>('/api/v1/admin/events', {}, accessToken);
+export interface AdminEvent { id: string; action: string; resourceType: string; resourceId: string | null; createdAt: string; metadata: Record<string, unknown> }
+export const getAdminEvents = (accessToken: string, filters: { resourceType?: string } = {}) => {
+  const params = new URLSearchParams({ page: '1', pageSize: '50' });
+  if (filters.resourceType) params.set('resourceType', filters.resourceType);
+  return request<{ items: AdminEvent[]; total: number }>(`/api/v1/admin/events?${params.toString()}`, {}, accessToken);
+};

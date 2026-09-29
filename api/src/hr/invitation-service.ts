@@ -24,7 +24,7 @@ export interface InvitationRecord {
   id: string;
   tenantId: string;
   email: string;
-  roleKey: 'employee';
+  roleKey: 'employee' | 'hr';
   status: 'pending' | 'accepted' | 'expired' | 'revoked';
   expiresAt: string;
   acceptedAt: string | null;
@@ -36,7 +36,7 @@ export interface InvitationView {
   id: string;
   tenantId: string;
   email: string;
-  role: 'employee';
+  role: 'employee' | 'hr';
   status: InvitationRecord['status'];
   expiresAt: string;
   acceptedAt: string | null;
@@ -48,6 +48,7 @@ export interface InvitationView {
 export interface CreateInvitationInput {
   tenantId: string;
   email: string;
+  roleKey: 'employee' | 'hr';
   invitedBy: string;
   expiresAt: string;
   tokenHash: string;
@@ -70,18 +71,18 @@ export interface HrRepository {
 
 export interface CreateEmployeeInvitationInput { email: string; name?: string; role?: string; }
 
-export function tenantForHr(identity: IdentityContext): { tenantId: string; userId: string } {
+export function tenantForHr(identity: IdentityContext): { tenantId: string; userId: string; roles: string[] } {
   const membership = identity.memberships.find((candidate) => candidate.status === 'active'
     && candidate.tenant.status === 'active'
     && candidate.roles.some((role) => role.key === 'hr' || role.key === 'admin'));
   if (!membership) throw new ApiError(403, 'ROLE_REQUIRED', 'An active HR membership is required.');
-  return { tenantId: membership.tenant_id, userId: identity.user.id };
+  return { tenantId: membership.tenant_id, userId: identity.user.id, roles: membership.roles.map((role) => role.key) };
 }
 
 function normalizeEmail(value: string): string {
   const email = value.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 320) {
-    throw new ApiError(400, 'VALIDATION_ERROR', 'A valid employee email is required.');
+    throw new ApiError(400, 'VALIDATION_ERROR', 'A valid work email is required.');
   }
   return email;
 }
@@ -114,7 +115,7 @@ export function makeHrService({
   now = () => new Date(),
   frontendOrigin = process.env.FRONTEND_ORIGIN ?? 'https://relo-web.onrender.com',
 }: { repository: HrRepository; now?: () => Date; frontendOrigin?: string }) {
-  const inviteUrl = (token: string) => `${frontendOrigin.replace(/\/$/, '')}/invitations/${encodeURIComponent(token)}`;
+  const inviteUrl = (token: string) => `${frontendOrigin.replace(/\/$/, '')}/invite/${encodeURIComponent(token)}`;
 
   return {
     async listTenantEmployees(identity: IdentityContext, input: { page?: number; pageSize?: number; search?: string } = {}): Promise<EmployeePage> {
@@ -128,8 +129,12 @@ export function makeHrService({
     },
 
     async createEmployeeInvitation(identity: IdentityContext, input: CreateEmployeeInvitationInput, idempotencyKey: string): Promise<InvitationView> {
-      const { tenantId, userId } = tenantForHr(identity);
-      if (input.role && input.role !== 'employee') throw new ApiError(403, 'ROLE_NOT_ALLOWED', 'HR can only invite employees.');
+      const { tenantId, userId, roles } = tenantForHr(identity);
+      const role = input.role ?? 'employee';
+      if (role !== 'employee' && role !== 'hr') throw new ApiError(403, 'ROLE_NOT_ALLOWED', 'Only employee and HR invitations are supported.');
+      if (role === 'hr' && !roles.includes('admin')) {
+        throw new ApiError(403, 'ROLE_NOT_ALLOWED', 'Only a tenant administrator can invite HR users.');
+      }
       const email = normalizeEmail(input.email);
       if (!idempotencyKey || idempotencyKey.length < 8) throw new ApiError(400, 'VALIDATION_ERROR', 'A valid idempotency key is required.');
       const hash = requestHash({ ...input, email });
@@ -145,6 +150,7 @@ export function makeHrService({
       const record = await repository.createInvitation({
         tenantId,
         email,
+        roleKey: role,
         invitedBy: userId,
         expiresAt: new Date(now().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         tokenHash: createHash('sha256').update(token).digest('hex'),
@@ -160,7 +166,7 @@ export function makeHrService({
       const existing = await repository.getInvitation(tenantId, invitationId);
       if (!existing || existing.status !== 'pending') throw new ApiError(404, 'NOT_FOUND', 'The invitation was not found.');
       const token = randomBytes(32).toString('hex');
-      const result = await repository.resendInvitation({ id: invitationId, tenantId, email: existing.email, invitedBy: userId, expiresAt: new Date(now().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(), tokenHash: createHash('sha256').update(token).digest('hex') });
+      const result = await repository.resendInvitation({ id: invitationId, tenantId, email: existing.email, roleKey: existing.roleKey, invitedBy: userId, expiresAt: new Date(now().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(), tokenHash: createHash('sha256').update(token).digest('hex') });
       if (result === 'rate_limited') throw new ApiError(429, 'INVITATION_RESEND_RATE_LIMITED', 'Please wait before resending this invitation.');
       if (!result) throw new ApiError(404, 'NOT_FOUND', 'The invitation was not found.');
       return invitationView(result, inviteUrl(token));

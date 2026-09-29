@@ -61,7 +61,7 @@ const employeeQuery = z.object({
   pageSize: z.coerce.number().int().positive().max(100).default(20),
   search: z.string().trim().max(100).optional(),
 });
-const invitationInput = z.object({ email: z.string().email(), name: z.string().trim().max(200).optional(), role: z.string().optional() });
+const invitationInput = z.object({ email: z.string().email(), name: z.string().trim().max(200).optional(), role: z.enum(['employee', 'hr']).optional() });
 const programQuery = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20),
