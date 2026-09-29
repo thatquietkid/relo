@@ -2,14 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../app/auth/AuthProvider';
 import type { WebSession } from '../../app/auth/auth-client';
+import { returnPathForWorkspace, workspaceHomePath, workspaceRoleForIdentity } from '../../app/auth/workspace-routing';
 
 function callbackParameters(): URLSearchParams {
   const hash = window.location.hash.replace(/^#/, '');
   return new URLSearchParams(hash || window.location.search.replace(/^\?/, ''));
-}
-
-function safeReturnTo(value: string | null): string {
-  return value?.startsWith('/') && !value.startsWith('//') ? value : '/';
 }
 
 export function AuthCallbackPage() {
@@ -37,10 +34,11 @@ export function AuthCallbackPage() {
       expiresIn: params.get('expires_in') ? Number(params.get('expires_in')) : null,
       tokenType: params.get('token_type') || 'bearer',
     };
-    completeOAuthCallback(callbackSession).then(() => {
-      const returnTo = safeReturnTo(sessionStorage.getItem('relo.returnTo'));
+    completeOAuthCallback(callbackSession).then((identity) => {
+      const role = workspaceRoleForIdentity(identity);
+      const returnTo = sessionStorage.getItem('relo.returnTo');
       sessionStorage.removeItem('relo.returnTo');
-      navigate(returnTo, { replace: true });
+      navigate(returnPathForWorkspace(returnTo, role) ?? workspaceHomePath(role), { replace: true });
     }).catch(() => setError('Google sign-in could not complete. Please try again.'));
   }, [completeOAuthCallback, navigate]);
 

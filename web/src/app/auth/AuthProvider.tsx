@@ -13,7 +13,7 @@ export interface AuthContextValue {
   signInDemo: (portal: DemoPortal) => Promise<WebIdentity>;
   signInWithGoogle: () => Promise<void>;
   refreshIdentity: () => Promise<void>;
-  completeOAuthCallback: (session: WebSession) => Promise<void>;
+  completeOAuthCallback: (session: WebSession) => Promise<WebIdentity>;
   signOut: () => Promise<void>;
 }
 
@@ -98,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(callbackSession);
     setIdentity(nextIdentity);
     setStatus('authenticated');
+    return nextIdentity;
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
