@@ -4,7 +4,7 @@ import { ApiError } from '../shared/errors.js';
 import { AARRR_METRICS, type AaarrrMetricKey } from './metric-definitions.js';
 
 export interface GrowthEvent { tenantId: string; type: string; occurredAt: string; aggregateId?: string; actorUserId?: string; payload?: Record<string, unknown>; }
-export interface MetricValue { key: AaarrrMetricKey; label: string; numerator: number; denominator: number; rate: number; status: 'ok' | 'no_data'; sourceEvents: string[]; }
+export interface MetricValue { key: AaarrrMetricKey; label: string; numerator: number; denominator: number; rate: number; status: 'ok' | 'no_data'; sourceEvents: string[]; demoData: boolean; }
 export interface AaarrrReport { from: string; to: string; generatedAt: string; metrics: Record<AaarrrMetricKey, MetricValue>; acquisition: MetricValue; activation: MetricValue; retention: MetricValue; referral: MetricValue; revenue: MetricValue; }
 export interface ExportJobView { id: string; status: 'queued' | 'running' | 'completed' | 'failed'; requestedAt: string; }
 export interface ReportRepository { listEvents(tenantId: string, input: { from: string; to: string }): Promise<GrowthEvent[]>; createExport(input: { tenantId: string; actorUserId: string; from: string; to: string; idempotencyKey: string }): Promise<ExportJobView>; findExport?(tenantId: string, actorUserId: string, idempotencyKey: string): Promise<ExportJobView | null>; }
@@ -16,7 +16,7 @@ export function makeReportService({ repository, now = () => new Date() }: { repo
       const { tenantId } = tenantForHr(identity); const from = safeDate(input.from, 'Report start'); const to = safeDate(input.to, 'Report end');
       if (input.to <= input.from) throw new ApiError(400, 'VALIDATION_ERROR', 'Report end must be after report start.');
       const events = await repository.listEvents(tenantId, { from, to });
-      const metrics = Object.fromEntries(Object.entries(AARRR_METRICS).map(([key, definition]) => { const denominator = count(events, definition.denominator); const numerator = count(events, definition.numerator); return [key, { key, label: definition.label, numerator, denominator, rate: denominator ? Math.min(1, numerator / denominator) : 0, status: denominator ? 'ok' : 'no_data', sourceEvents: definition.sourceEvents }]; })) as Record<AaarrrMetricKey, MetricValue>;
+      const metrics = Object.fromEntries(Object.entries(AARRR_METRICS).map(([key, definition]) => { const denominator = count(events, definition.denominator); const numerator = count(events, definition.numerator); const demoData = events.some((event) => definition.sourceEvents.includes(event.type) && event.payload?.demo_seed === true); return [key, { key, label: definition.label, numerator, denominator, rate: denominator ? Math.min(1, numerator / denominator) : 0, status: denominator ? 'ok' : 'no_data', sourceEvents: definition.sourceEvents, demoData }]; })) as Record<AaarrrMetricKey, MetricValue>;
       return { from, to, generatedAt: now().toISOString(), metrics, ...metrics };
     },
     async requestReportExport(identity: IdentityContext, input: { from: Date; to: Date }, idempotencyKey: string): Promise<ExportJobView> {
