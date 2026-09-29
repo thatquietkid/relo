@@ -12,6 +12,7 @@ RUN npm ci
 
 COPY packages packages
 COPY web web
+ARG VITE_RELO_API_URL
 RUN npm run build --workspace web
 
 FROM nginx:1.27-alpine

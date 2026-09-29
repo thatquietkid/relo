@@ -8,6 +8,7 @@ describe('web deployment wiring', () => {
   it('builds and serves the web workspace from its own Docker image', () => {
     const dockerfile = readFileSync(resolve(root, 'web/Dockerfile'), 'utf8');
     expect(dockerfile).toContain('npm run build --workspace web');
+    expect(dockerfile).toContain('ARG VITE_RELO_API_URL');
     expect(dockerfile).toContain('nginx');
     expect(dockerfile).toContain('USER nginx');
     expect(dockerfile).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY|service_role|client_secret/i);
