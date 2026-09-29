@@ -1,17 +1,48 @@
 :root {
+  /* Colour palette */
   --relo-navy: #12333c;
   --relo-navy-soft: #1d4a53;
+  --relo-navy-glow: #2a6672;
   --relo-paper: #f4f1e8;
   --relo-paper-deep: #e8e7de;
   --relo-sun: #f3b841;
   --relo-sun-pale: #fbebc7;
+  --relo-sun-glow: rgba(243, 184, 65, 0.35);
   --relo-mint: #c3e2d7;
   --relo-mint-deep: #2c756c;
+  --relo-mint-glow: rgba(44, 117, 108, 0.18);
   --relo-ink: #203239;
   --relo-muted: #6a7775;
   --relo-line: #d7ddd7;
+
+  /* Typography */
   --relo-serif: Georgia, 'Times New Roman', serif;
   --relo-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Shape */
   --relo-radius: 14px;
+  --relo-radius-lg: 20px;
+
+  /* Shadows */
   --relo-shadow: 0 18px 50px rgba(18, 51, 60, .10);
+  --relo-shadow-lift: 0 24px 60px rgba(18, 51, 60, .18);
+  --relo-shadow-glow: 0 0 0 3px var(--relo-sun-glow);
+  --relo-shadow-mint: 0 0 0 3px var(--relo-mint-glow);
+
+  /* Animation durations */
+  --dur-fast: 150ms;
+  --dur-base: 250ms;
+  --dur-slow: 400ms;
+  --dur-enter: 520ms;
+
+  /* Easing */
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+
+  /* Progress ring */
+  --ring-size: 80px;
+  --ring-stroke: 8;
+  --ring-r: 34;
+  --ring-circ: 213.6;
 }

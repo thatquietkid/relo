@@ -23,7 +23,7 @@ vi.mock('../src/app/auth/auth-client', () => ({ ...client }));
 const session = { accessToken: 'access-token', refreshToken: 'refresh-token', expiresAt: null, expiresIn: null, tokenType: 'bearer' };
 const identity = { user: { id: 'employee-1', email: 'employee@example.com' }, memberships: [] };
 const authValue: AuthContextValue = {
-  session, identity, status: 'authenticated', requestOtp: vi.fn(), verifyOtp: vi.fn(), signInWithGoogle: vi.fn(),
+  session, identity, status: 'authenticated', requestOtp: vi.fn(), verifyOtp: vi.fn(), signInDemo: vi.fn(), signInWithGoogle: vi.fn(),
   refreshIdentity: vi.fn(), completeOAuthCallback: vi.fn(), signOut: vi.fn(),
 };
 

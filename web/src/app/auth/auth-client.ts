@@ -91,6 +91,11 @@ export const verifyOtp = (email: string, token: string) => request<{ session: We
   method: 'POST', body: JSON.stringify({ email, token }),
 });
 
+export type DemoPortal = 'employee' | 'hr' | 'admin';
+export const signInToDemoPortal = (portal: DemoPortal) => request<{ session: WebSession; identity: WebIdentity }>('/api/v1/auth/demo', {
+  method: 'POST', body: JSON.stringify({ portal }),
+});
+
 export const startGoogleSignIn = async (redirectTo = `${window.location.origin}/auth/callback`) => {
   const result = await request<{ url: string }>(`/api/v1/auth/google/start?redirect_to=${encodeURIComponent(redirectTo)}`);
   return result;

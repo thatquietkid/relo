@@ -16,9 +16,12 @@ export interface SessionResult {
   identity: IdentityContext;
 }
 
+export type DemoPortal = 'employee' | 'hr' | 'admin';
+
 export interface AuthService {
   requestEmailOtp(email: string): Promise<{ accepted: true }>;
   verifyEmailOtp(email: string, token: string): Promise<SessionResult>;
+  signInDemo?(portal: DemoPortal): Promise<SessionResult>;
   getGoogleSignInUrl(redirectTo: string): Promise<string>;
   getCurrentIdentity(accessToken: string): Promise<IdentityContext>;
   logout(accessToken: string): Promise<{ signedOut: true }>;
@@ -95,6 +98,33 @@ export function makeAuthService({
 }: AuthServiceOptions): AuthService {
   const allowedRedirects = configuredRedirects(frontendOrigin, googleRedirectAllowlist);
   return {
+    async signInDemo(portal) {
+      const prefix = `RELO_DEMO_${portal.toUpperCase()}`;
+      const email = process.env[`${prefix}_EMAIL`]?.trim();
+      const password = process.env[`${prefix}_PASSWORD`]?.trim();
+      if (!email || !password) {
+        throw new ApiError(503, 'DEMO_ACCESS_NOT_CONFIGURED', 'Demo access is not configured for this environment.');
+      }
+
+      if (!supabase.auth.signInWithPassword) {
+        throw new ApiError(503, 'DEMO_ACCESS_NOT_CONFIGURED', 'Demo access is not configured for this environment.');
+      }
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error || !data.session || !data.user) {
+        throw new ApiError(401, 'DEMO_SIGN_IN_FAILED', 'The demo portal could not be opened.');
+      }
+
+      const identity: IdentityContext = {
+        user: { id: data.user.id, email: data.user.email ?? email },
+        memberships: await supabase.getActiveMemberships(data.user.id),
+      };
+      if (identity.memberships[0]?.roles[0]?.key !== portal) {
+        throw new ApiError(403, 'DEMO_PORTAL_ROLE_MISMATCH', 'The configured demo account is not assigned to this portal.');
+      }
+
+      return { session: toSession(data.session), identity };
+    },
+
     async requestEmailOtp(email) {
       const normalized = normalizeEmail(email);
       if (!normalized) {

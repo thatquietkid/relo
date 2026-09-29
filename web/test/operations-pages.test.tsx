@@ -11,7 +11,7 @@ import { AdminEventsPage } from '../src/pages/admin/AdminEventsPage';
 const auth: AuthContextValue = {
   session: { accessToken: 'token', refreshToken: 'refresh', expiresAt: null, expiresIn: null, tokenType: 'bearer' },
   identity: { user: { id: 'hr-1', email: 'hr@example.com' }, memberships: [{ id: 'm-1', tenant_id: 't-1', user_id: 'hr-1', status: 'active', joined_at: '', suspended_at: null, tenant: { id: 't-1', name: 'Acme', slug: 'acme', status: 'active' }, roles: [{ id: 'r-1', key: 'hr' }] }] },
-  status: 'authenticated', requestOtp: vi.fn(), verifyOtp: vi.fn(), signInWithGoogle: vi.fn(), refreshIdentity: vi.fn(), completeOAuthCallback: vi.fn(), signOut: vi.fn(),
+  status: 'authenticated', requestOtp: vi.fn(), verifyOtp: vi.fn(), signInDemo: vi.fn(), signInWithGoogle: vi.fn(), refreshIdentity: vi.fn(), completeOAuthCallback: vi.fn(), signOut: vi.fn(),
 };
 
 vi.mock('../src/app/auth/auth-client', () => ({

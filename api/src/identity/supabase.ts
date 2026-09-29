@@ -17,6 +17,10 @@ export interface SupabaseSession {
 
 export interface SupabaseAuthPort {
   auth: {
+    signInWithPassword?(input: { email: string; password: string }): Promise<{
+      data: { session: SupabaseSession | null; user: { id: string; email?: string | null } | null };
+      error: SupabaseError | null;
+    }>;
     signInWithOtp(input: {
       email: string;
       options: { shouldCreateUser: false };
@@ -186,6 +190,7 @@ export function createSupabasePort(client: SupabaseClient, restConfig?: Supabase
   const request = restConfig ? makeAuthRestRequest(restConfig) : null;
   return {
     auth: {
+      signInWithPassword: (input) => client.auth.signInWithPassword(input),
       signInWithOtp: (input) => client.auth.signInWithOtp(input),
       verifyOtp: (input) => client.auth.verifyOtp(input),
       getUser: (accessToken) => client.auth.getUser(accessToken),

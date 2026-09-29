@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as client from './auth-client';
-import type { WebIdentity, WebSession } from './auth-client';
+import type { DemoPortal, WebIdentity, WebSession } from './auth-client';
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
 export interface AuthContextValue {
@@ -9,6 +9,7 @@ export interface AuthContextValue {
   status: AuthStatus;
   requestOtp: (email: string) => Promise<void>;
   verifyOtp: (email: string, token: string) => Promise<void>;
+  signInDemo: (portal: DemoPortal) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   refreshIdentity: () => Promise<void>;
   completeOAuthCallback: (session: WebSession) => Promise<void>;
@@ -72,6 +73,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('authenticated');
   }, []);
 
+  const signInDemo = useCallback(async (portal: DemoPortal) => {
+    const result = await client.signInToDemoPortal(portal);
+    storeSession(result.session);
+    setSession(result.session);
+    setIdentity(result.identity);
+    setStatus('authenticated');
+  }, []);
+
   const refreshIdentity = useCallback(async () => {
     if (!session) return;
     const nextIdentity = await client.getCurrentIdentity(session.accessToken);
@@ -106,8 +115,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [session]);
 
-  const value = useMemo(() => ({ session, identity, status, requestOtp, verifyOtp, signInWithGoogle, refreshIdentity, completeOAuthCallback, signOut }), [
-    session, identity, status, requestOtp, verifyOtp, signInWithGoogle, refreshIdentity, completeOAuthCallback, signOut,
+  const value = useMemo(() => ({ session, identity, status, requestOtp, verifyOtp, signInDemo, signInWithGoogle, refreshIdentity, completeOAuthCallback, signOut }), [
+    session, identity, status, requestOtp, verifyOtp, signInDemo, signInWithGoogle, refreshIdentity, completeOAuthCallback, signOut,
   ]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

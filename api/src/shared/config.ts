@@ -3,6 +3,7 @@ export interface ApiConfig {
   port: number;
   nodeEnv: 'development' | 'test' | 'production';
   frontendOrigin: string;
+  demoAccessEnabled: boolean;
   supabaseUrl?: string;
   supabasePublishableKey?: string;
   supabaseServiceRoleKey?: string;
@@ -60,6 +61,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     port: Number.isInteger(port) && port > 0 ? port : 3000,
     nodeEnv,
     frontendOrigin,
+    demoAccessEnabled: nodeEnv === 'development'
+      && env.RELO_DEMO_ACCESS_ENABLED === 'true'
+      && ['EMPLOYEE', 'HR', 'ADMIN'].every((portal) =>
+        Boolean(env[`RELO_DEMO_${portal}_EMAIL`]?.trim())
+        && Boolean(env[`RELO_DEMO_${portal}_PASSWORD`]?.trim())),
     supabaseUrl: validatedSupabaseUrl,
     supabasePublishableKey,
     supabaseServiceRoleKey: optionalValue(env, 'SUPABASE_SERVICE_ROLE_KEY'),

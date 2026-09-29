@@ -29,6 +29,8 @@ export function createApp(
 ): FastifyInstance {
   const resolvedDependencies: AppDependencies = {
     ...dependencies,
+    frontendOrigin: dependencies.frontendOrigin ?? config.frontendOrigin,
+    demoAccessEnabled: config.demoAccessEnabled,
     createEmployeeRepository: dependencies.createEmployeeRepository ?? createSupabaseEmployeeRepositoryFromEnv,
   };
   const app = Fastify({
