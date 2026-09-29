@@ -30,8 +30,15 @@ describe('web deployment wiring', () => {
     expect(render).toContain('name: relo-web');
     expect(render).toContain('dockerfilePath: ./web/Dockerfile');
     expect(render).toContain('key: VITE_RELO_API_URL');
+    expect(render).toContain('value: https://relo-api-ernh.onrender.com');
+    expect(render).toContain('value: https://relo-web-ernh.onrender.com');
     const webService = render.split('  - type: web')[1]?.split('  - type: web')[0] || '';
     expect(webService).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY|service_role|client_secret/i);
+  });
+
+  it('allows the deployed API in the web Content Security Policy', () => {
+    const nginx = readFileSync(resolve(root, 'web/nginx.conf'), 'utf8');
+    expect(nginx).toContain('connect-src \'self\' https://relo-api-ernh.onrender.com');
   });
 
   it('declares a separate free-plan worker boundary with health-only web compatibility', () => {

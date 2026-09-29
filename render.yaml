@@ -12,7 +12,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: VITE_RELO_API_URL
-        value: https://relo-api.onrender.com
+        value: https://relo-api-ernh.onrender.com
 
   - type: web
     name: relo-api
@@ -27,7 +27,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: FRONTEND_ORIGIN
-        value: https://relo-web.onrender.com
+        value: https://relo-web-ernh.onrender.com
       - key: SUPABASE_URL
         value: https://rxmkcjjiyrteooztynsr.supabase.co
       - key: SUPABASE_PUBLISHABLE_KEY
