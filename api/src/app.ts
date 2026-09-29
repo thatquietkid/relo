@@ -50,8 +50,8 @@ export function createApp(
     if (origin && !allowedOrigin(origin, { ...process.env, FRONTEND_ORIGIN: config.frontendOrigin, SUPABASE_URL: config.supabaseUrl })) {
       return reply.code(403).send({ error: { code: 'ORIGIN_NOT_ALLOWED', message: 'The request origin is not allowed.', requestId: request.id } });
     }
+    if (origin) reply.header('Access-Control-Allow-Origin', origin);
     if (request.method === 'OPTIONS') {
-      if (origin) reply.header('Access-Control-Allow-Origin', origin);
       reply.header('Access-Control-Allow-Headers', 'Authorization, Content-Type, Idempotency-Key, X-Tenant-Id');
       reply.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
       return reply.code(204).send();
