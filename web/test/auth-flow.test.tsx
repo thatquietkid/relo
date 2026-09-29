@@ -108,6 +108,23 @@ describe('authenticated web shell', () => {
     expect(authClient.requestOtp).toHaveBeenCalledWith('employee@example.com');
   });
 
+  it('uses the identity returned by OTP verification without refetching it', async () => {
+    const user = userEvent.setup();
+    authClient.verifyOtp.mockResolvedValue({
+      session: { accessToken: 'access-token', refreshToken: 'refresh-token', expiresAt: null, expiresIn: 3600, tokenType: 'bearer' },
+      identity: employeeIdentity,
+    });
+    renderWithAuth(<LoginPage />);
+
+    await user.type(screen.getByLabelText('Work email'), 'employee@example.com');
+    await user.click(screen.getByRole('button', { name: /send sign-in code/i }));
+    await user.type(await screen.findByLabelText('One-time code'), '123456');
+    await user.click(screen.getByRole('button', { name: /verify code/i }));
+
+    await waitFor(() => expect(sessionStorage.getItem('relo.session')).toContain('access-token'));
+    expect(authClient.getCurrentIdentity).not.toHaveBeenCalled();
+  });
+
   it('shows an invalid OTP error and supports Google sign-in start', async () => {
     const user = userEvent.setup();
     authClient.verifyOtp.mockRejectedValue({ error: { code: 'INVALID_OTP', message: 'The email code is invalid or expired.' } });

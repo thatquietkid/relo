@@ -29,6 +29,7 @@ export interface AuthService {
 
 interface AuthServiceOptions {
   supabase: SupabaseAuthPort;
+  createSupabasePort?: (accessToken?: string) => SupabaseAuthPort;
   frontendOrigin?: string;
   googleRedirectAllowlist?: string[];
 }
@@ -93,6 +94,7 @@ async function platformAuthorization(supabase: SupabaseAuthPort): Promise<Pick<I
 
 export function makeAuthService({
   supabase,
+  createSupabasePort,
   frontendOrigin = process.env.FRONTEND_ORIGIN ?? 'http://127.0.0.1:4173',
   googleRedirectAllowlist,
 }: AuthServiceOptions): AuthService {
@@ -114,9 +116,10 @@ export function makeAuthService({
         throw new ApiError(401, 'DEMO_SIGN_IN_FAILED', 'The demo portal could not be opened.');
       }
 
+      const authenticatedSupabase = createSupabasePort?.(data.session.access_token) ?? supabase;
       const identity: IdentityContext = {
         user: { id: data.user.id, email: data.user.email ?? email },
-        memberships: await supabase.getActiveMemberships(data.user.id),
+        memberships: await authenticatedSupabase.getActiveMemberships(data.user.id),
       };
       if (identity.memberships[0]?.roles[0]?.key !== portal) {
         throw new ApiError(403, 'DEMO_PORTAL_ROLE_MISMATCH', 'The configured demo account is not assigned to this portal.');
@@ -154,9 +157,10 @@ export function makeAuthService({
         throw new ApiError(401, 'INVALID_OTP', 'The email code is invalid or expired.');
       }
       const user = { id: data.user.id, email: data.user.email ?? normalized };
+      const authenticatedSupabase = createSupabasePort?.(data.session.access_token) ?? supabase;
       const identity: IdentityContext = {
         user,
-        memberships: await supabase.getActiveMemberships(user.id),
+        memberships: await authenticatedSupabase.getActiveMemberships(user.id),
       };
       return { session: toSession(data.session), identity };
     },

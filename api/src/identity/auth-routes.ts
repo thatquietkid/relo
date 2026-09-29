@@ -30,6 +30,7 @@ function authService(deps: AuthRouteDependencies, accessToken?: string): AuthSer
   const factory = deps.createSupabasePort ?? createSupabasePortFromEnv;
   return makeAuthService({
     supabase: factory(accessToken),
+    createSupabasePort: factory,
     frontendOrigin: deps.frontendOrigin,
   });
 }

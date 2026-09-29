@@ -56,7 +56,8 @@ describe('auth service', () => {
   });
 
   it('returns only safe session metadata and active memberships after OTP verification', async () => {
-    const supabase = fakeSupabase({
+    const supabase = fakeSupabase();
+    const authenticatedSupabase = fakeSupabase({
       getActiveMemberships: vi.fn().mockResolvedValue([{
         id: 'membership-1',
         tenant_id: 'tenant-1',
@@ -68,7 +69,8 @@ describe('auth service', () => {
         roles: [{ id: 'role-1', key: 'employee' }],
       }]),
     });
-    const auth = makeAuthService({ supabase });
+    const createSupabasePort = vi.fn().mockReturnValue(authenticatedSupabase);
+    const auth = makeAuthService({ supabase, createSupabasePort });
 
     await expect(auth.verifyEmailOtp('employee@example.com', '123456')).resolves.toEqual({
       session: {
@@ -88,6 +90,9 @@ describe('auth service', () => {
       token: '123456',
       type: 'email',
     });
+    expect(createSupabasePort).toHaveBeenCalledWith('access-token');
+    expect(authenticatedSupabase.getActiveMemberships).toHaveBeenCalledWith('user-1');
+    expect(supabase.getActiveMemberships).not.toHaveBeenCalled();
   });
 
   it('rejects a disallowed Google redirect target', async () => {
