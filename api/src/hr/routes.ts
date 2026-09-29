@@ -7,6 +7,7 @@ import { parseIdempotencyKey, parseJsonBody } from '../shared/validation.js';
 import type { IdentityContext } from '../identity/types.js';
 import { createSupabaseHrRepositoryFromEnv } from './supabase-repository.js';
 import { makeHrService, type HrRepository } from './invitation-service.js';
+import { createSupabaseInvitationEmailSenderFromEnv, type InvitationEmailSender } from './supabase-invitation-email.js';
 import { createSupabaseHrOperationsRepositoryFromEnv, type HrOperationsRepository } from './supabase-operations-repository.js';
 import { makeProgramService } from './program-service.js';
 import type { ProgramStatus } from '../operations/types.js';
@@ -19,6 +20,8 @@ export interface HrRouteDependencies extends AuthorizationDependencies {
   hrOperationsRepository?: HrOperationsRepository;
   createHrOperationsRepository?: (accessToken: string) => HrOperationsRepository;
   frontendOrigin?: string;
+  invitationEmailSender?: InvitationEmailSender;
+  createInvitationEmailSender?: () => InvitationEmailSender;
 }
 
 function identityForRequest(request: FastifyRequest): IdentityContext {
@@ -103,14 +106,26 @@ export function registerHrRoutes(app: FastifyInstance, deps: HrRouteDependencies
     const input = parseJsonBody(invitationInput, request.body);
     const idempotencyKey = parseIdempotencyKey(request.headers['idempotency-key']);
     const repository = repositoryForRequest(deps, request);
-    const invitation = await makeHrService({ repository, frontendOrigin: deps.frontendOrigin }).createEmployeeInvitation(identityForRequest(request), input, idempotencyKey);
+    let emailSender: InvitationEmailSender;
+    try { emailSender = deps.invitationEmailSender ?? (deps.createInvitationEmailSender ?? createSupabaseInvitationEmailSenderFromEnv)(); }
+    catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(503, 'INVITATION_EMAIL_UNAVAILABLE', 'Invitation email is not configured. Contact your administrator.');
+    }
+    const invitation = await makeHrService({ repository, emailSender, frontendOrigin: deps.frontendOrigin }).createEmployeeInvitation(identityForRequest(request), input, idempotencyKey);
     return reply.code(201).send({ invitation });
   });
 
   app.post('/api/v1/hr/invitations/:id/resend', { preHandler: [hooks.requireAuth, role] }, async (request) => {
     const idempotencyKey = parseIdempotencyKey(request.headers['idempotency-key']);
     const repository = repositoryForRequest(deps, request);
-    const invitation = await makeHrService({ repository, frontendOrigin: deps.frontendOrigin }).resendEmployeeInvitation(identityForRequest(request), invitationId(request), idempotencyKey);
+    let emailSender: InvitationEmailSender;
+    try { emailSender = deps.invitationEmailSender ?? (deps.createInvitationEmailSender ?? createSupabaseInvitationEmailSenderFromEnv)(); }
+    catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(503, 'INVITATION_EMAIL_UNAVAILABLE', 'Invitation email is not configured. Contact your administrator.');
+    }
+    const invitation = await makeHrService({ repository, emailSender, frontendOrigin: deps.frontendOrigin }).resendEmployeeInvitation(identityForRequest(request), invitationId(request), idempotencyKey);
     return { invitation };
   });
 

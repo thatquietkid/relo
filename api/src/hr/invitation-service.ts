@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { IdentityContext } from '../identity/types.js';
 import { ApiError } from '../shared/errors.js';
+import type { InvitationEmailSender } from './supabase-invitation-email.js';
 
 export interface EmployeeSummary {
   membershipId: string;
@@ -112,9 +113,10 @@ function invitationView(record: InvitationRecord, inviteUrl?: string): Invitatio
 
 export function makeHrService({
   repository,
+  emailSender,
   now = () => new Date(),
   frontendOrigin = process.env.FRONTEND_ORIGIN ?? 'https://relo-web.onrender.com',
-}: { repository: HrRepository; now?: () => Date; frontendOrigin?: string }) {
+}: { repository: HrRepository; emailSender?: InvitationEmailSender; now?: () => Date; frontendOrigin?: string }) {
   const inviteUrl = (token: string) => `${frontendOrigin.replace(/\/$/, '')}/invite/${encodeURIComponent(token)}`;
 
   return {
@@ -155,7 +157,16 @@ export function makeHrService({
         expiresAt: new Date(now().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         tokenHash: createHash('sha256').update(token).digest('hex'),
       });
-      const response = invitationView(record, inviteUrl(token));
+      if (emailSender) {
+        try {
+          await emailSender.send(email, inviteUrl(token));
+        } catch (cause) {
+          try { await repository.revokeInvitation(tenantId, record.id); } catch { /* Preserve the email delivery error. */ }
+          if (cause instanceof ApiError) throw cause;
+          throw new ApiError(502, 'INVITATION_EMAIL_FAILED', 'Supabase could not send this invitation. Please try again.');
+        }
+      }
+      const response = invitationView(record, emailSender ? undefined : inviteUrl(token));
       await repository.saveIdempotency?.(tenantId, userId, idempotencyKey, hash, response);
       return response;
     },
@@ -169,7 +180,15 @@ export function makeHrService({
       const result = await repository.resendInvitation({ id: invitationId, tenantId, email: existing.email, roleKey: existing.roleKey, invitedBy: userId, expiresAt: new Date(now().getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(), tokenHash: createHash('sha256').update(token).digest('hex') });
       if (result === 'rate_limited') throw new ApiError(429, 'INVITATION_RESEND_RATE_LIMITED', 'Please wait before resending this invitation.');
       if (!result) throw new ApiError(404, 'NOT_FOUND', 'The invitation was not found.');
-      return invitationView(result, inviteUrl(token));
+      if (emailSender) {
+        try {
+          await emailSender.send(existing.email, inviteUrl(token));
+        } catch (cause) {
+          if (cause instanceof ApiError) throw cause;
+          throw new ApiError(502, 'INVITATION_EMAIL_FAILED', 'Supabase could not resend this invitation. Please try again.');
+        }
+      }
+      return invitationView(result, emailSender ? undefined : inviteUrl(token));
     },
 
     async revokeEmployeeInvitation(identity: IdentityContext, invitationId: string): Promise<InvitationView> {

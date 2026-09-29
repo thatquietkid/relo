@@ -47,7 +47,7 @@ export function InviteUsersPanel({ allowHrRole = false }: { allowHrRole?: boolea
       const result = await client.createHrInvitation(session.accessToken, { email: email.trim(), role }, idempotencyKey());
       setInvite(result.invitation);
       setEmail('');
-      setNotice(`${role === 'hr' ? 'HR' : 'Employee'} invitation link is ready to share.`);
+      setNotice(`${role === 'hr' ? 'HR' : 'Employee'} invitation email sent to ${email.trim()}.`);
     } catch (cause) {
       const message = (cause as { response?: { error?: { message?: string } } })?.response?.error?.message;
       setError(message || 'The invitation could not be created. Check the email and try again.');
@@ -73,7 +73,7 @@ export function InviteUsersPanel({ allowHrRole = false }: { allowHrRole?: boolea
           <div>
             <p className="eyebrow">Access, by invitation</p>
             <h2>Invite someone</h2>
-            <p>We’ll create a single-use link for {identity?.memberships[0]?.tenant.name ?? 'your workspace'}.</p>
+            <p>We’ll email a secure invitation for {identity?.memberships[0]?.tenant.name ?? 'your workspace'}.</p>
           </div>
           <span className="category-pill">{allowHrRole ? 'Employee or HR' : 'Employee access'}</span>
         </div>
@@ -92,7 +92,7 @@ export function InviteUsersPanel({ allowHrRole = false }: { allowHrRole?: boolea
             </label>
           )}
           <button className="button button-primary" type="submit" disabled={submitting}>
-            {submitting ? 'Creating link…' : 'Send invitation'}
+            {submitting ? 'Sending email…' : 'Send invitation'}
           </button>
         </form>
         {error && <p className="form-error" role="alert">{error}</p>}
