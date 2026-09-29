@@ -34,7 +34,7 @@ export function EmployeeHomePage() {
         <div>
           <ProgressCard
             progress={relocation?.progress_percent ?? 0}
-            destination={relocation?.destination_city_id}
+            destination={relocation?.destination_city_name ?? undefined}
             moveDate={relocation?.move_date}
           />
           <section className="next-action panel">

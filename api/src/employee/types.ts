@@ -22,6 +22,7 @@ export interface RelocationCaseRow {
   tenant_id: string;
   employee_user_id: string;
   destination_city_id: string;
+  destination_city_name?: string | null;
   move_date: string;
   status: RelocationCaseStatus;
   progress_percent: number;

@@ -18,11 +18,13 @@ function repositoryError(): ApiError {
 function mapCase(value: unknown): RelocationCaseRow {
   if (!value || typeof value !== 'object') throw repositoryError();
   const row = value as Record<string, unknown>;
+  const city = Array.isArray(row.cities) ? row.cities[0] : row.cities;
   return {
     id: String(row.id),
     tenant_id: String(row.tenant_id),
     employee_user_id: String(row.employee_user_id),
     destination_city_id: String(row.destination_city_id),
+    destination_city_name: city && typeof city === 'object' && 'name' in city && typeof city.name === 'string' ? city.name : null,
     move_date: String(row.move_date),
     status: row.status as RelocationCaseRow['status'],
     progress_percent: Number(row.progress_percent),
@@ -88,7 +90,7 @@ export function makeSupabaseEmployeeRepository(client: ReturnType<typeof createS
     async getCaseForEmployee(userId, tenantId) {
       const result = await client
         .from('relocation_cases')
-        .select('id, tenant_id, employee_user_id, destination_city_id, move_date, status, progress_percent, created_at, updated_at')
+        .select('id, tenant_id, employee_user_id, destination_city_id, move_date, status, progress_percent, created_at, updated_at, cities!relocation_cases_destination_city_id_fkey(name)')
         .eq('employee_user_id', userId)
         .eq('tenant_id', tenantId)
         .neq('status', 'cancelled')
@@ -102,7 +104,7 @@ export function makeSupabaseEmployeeRepository(client: ReturnType<typeof createS
     async getCaseById(caseId) {
       const result = await client
         .from('relocation_cases')
-        .select('id, tenant_id, employee_user_id, destination_city_id, move_date, status, progress_percent, created_at, updated_at')
+        .select('id, tenant_id, employee_user_id, destination_city_id, move_date, status, progress_percent, created_at, updated_at, cities!relocation_cases_destination_city_id_fkey(name)')
         .eq('id', caseId)
         .maybeSingle();
       if (result.error) throw mapError(result.error);

@@ -125,6 +125,7 @@ export const denyOAuth = (authorizationId: string, accessToken: string) => reque
 export interface EmployeeCase {
   id: string;
   destination_city_id: string;
+  destination_city_name?: string | null;
   move_date: string;
   status: string;
   progress_percent: number;
