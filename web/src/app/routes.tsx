@@ -14,6 +14,8 @@ const navByRole: Record<string, Array<[string, string, string]>> = {
   hr: [
     ['/hr', '▦', 'Overview'],
     ['/hr/employees', '♙', 'Employees'],
+    ['/hr/properties', '⌂', 'Properties'],
+    ['/hr/cohorts', '◈', 'Cohorts'],
     ['/hr/programs', '✓', 'Programs'],
     ['/hr/requests', '↗', 'Requests'],
     ['/hr/reports', '◌', 'Reports'],

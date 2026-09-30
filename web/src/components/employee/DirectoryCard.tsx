@@ -20,7 +20,7 @@ export function DirectoryCard({ entry, saved = false, disabled = false, onSave, 
             disabled={disabled}
             aria-label={`${saved ? 'Remove' : 'Save'} ${entry.title}`}
             onClick={onSave}
-            title={saved ? 'Saved — click to remove' : 'Save for later'}
+            title={saved ? 'Saved - click to remove' : 'Save for later'}
           >
             {saved ? '★' : '☆'}
           </button>

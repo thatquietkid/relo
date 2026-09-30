@@ -58,8 +58,8 @@ export function ProgressCard({ progress, destination, moveDate }: ProgressCardPr
           />
         </svg>
         <div className="progress-ring-text">
-          <strong>{displayProgress}</strong>
-          <span>%</span>
+          <span className="progress-ring-value">{displayProgress}</span>
+          <span className="progress-ring-percent">%</span>
         </div>
       </div>
 

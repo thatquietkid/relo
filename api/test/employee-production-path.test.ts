@@ -44,7 +44,7 @@ describe('production employee data path', () => {
     };
 
     await expect(repository.activateCase?.(input)).resolves.toEqual({
-      relocationCase: caseRow,
+      relocationCase: { ...caseRow, destination_city_name: null },
       checklist: [item],
     });
     expect(rpc).toHaveBeenCalledWith('employee_activate_relocation_case', {

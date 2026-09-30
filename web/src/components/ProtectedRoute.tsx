@@ -2,6 +2,8 @@ import { type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../app/auth/AuthProvider';
 
+import { ForbiddenPage } from '../pages/errors/ForbiddenPage';
+
 const rolePermissions: Record<string, string[]> = {
   employee: ['employee:read', 'employee:write', 'profile:read', 'profile:write', 'checklist:read', 'checklist:write', 'directory:read', 'shortlist:write', 'requests:write'],
   hr: ['hr:read', 'hr:write', 'programs:read', 'programs:write', 'invitations:read', 'invitations:write', 'reports:read'],
@@ -35,7 +37,7 @@ export function ProtectedRoute({ permission, children }: { permission: string; c
     return <Navigate to={`/login?returnTo=${encodeURIComponent(returnTo)}`} replace />;
   }
   if (!can(auth.identity, permission)) {
-    return <div className="route-state"><h1>Access not available</h1><p>Your current Relo membership does not include this workspace.</p></div>;
+    return <ForbiddenPage requiredPermission={permission} />;
   }
   return <>{children}</>;
 }

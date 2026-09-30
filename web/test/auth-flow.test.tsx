@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthProvider } from '../src/app/auth/AuthProvider';
 import { ProtectedRoute } from '../src/components/ProtectedRoute';
@@ -73,12 +73,13 @@ describe('authenticated web shell', () => {
 
   it('redirects an unauthenticated visitor to login without rendering protected content', async () => {
     renderWithAuth(
-      <ProtectedRoute permission="employee:read">
-        <div>dashboard</div>
-      </ProtectedRoute>,
+      <Routes>
+        <Route path="/" element={<ProtectedRoute permission="employee:read"><div>dashboard</div></ProtectedRoute>} />
+        <Route path="/login" element={<LoginPage />} />
+      </Routes>,
     );
 
-    await waitFor(() => expect(screen.getByRole('link', { name: /sign in/i })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: /a calmer way to get there/i })).toBeInTheDocument());
     expect(screen.queryByText('dashboard')).not.toBeInTheDocument();
     expect(window.location.pathname).toBe('/login');
   });
@@ -160,11 +161,16 @@ describe('authenticated web shell', () => {
     authClient.getCurrentIdentity.mockResolvedValue(employeeIdentity);
     authClient.logout.mockRejectedValueOnce(new Error('network down'));
 
-    renderWithAuth(<ProtectedRoute permission="employee:read"><AppShell /></ProtectedRoute>);
+    renderWithAuth(
+      <Routes>
+        <Route path="/" element={<ProtectedRoute permission="employee:read"><AppShell /></ProtectedRoute>} />
+        <Route path="/login" element={<LoginPage />} />
+      </Routes>,
+    );
     await screen.findByRole('button', { name: /sign out/i });
     await user.click(screen.getByRole('button', { name: /sign out/i }));
 
-    expect(await screen.findByRole('link', { name: /sign in/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /a calmer way to get there/i })).toBeInTheDocument();
     expect(sessionStorage.getItem('relo.session')).toBeNull();
   });
 
