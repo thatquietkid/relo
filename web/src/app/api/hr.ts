@@ -27,6 +27,7 @@ export interface AaarrrMetric {
   rate: number;
   status: 'ok' | 'no_data';
   sourceEvents: string[];
+  demoData?: boolean;
 }
 
 export interface AaarrrReport {
@@ -78,6 +79,66 @@ export interface HrCohort {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface HrEmployeeSummary {
+  membershipId: string;
+  userId: string;
+  email: string;
+  name: string | null;
+  status: string;
+  joinedAt: string;
+  roles: string[];
+}
+
+export interface HrInvitation {
+  id: string;
+  tenantId: string;
+  email: string;
+  role: 'employee' | 'hr';
+  status: 'pending' | 'accepted' | 'expired' | 'revoked';
+  expiresAt: string;
+  acceptedAt: string | null;
+  invitedBy: string | null;
+  createdAt: string;
+  inviteUrl?: string;
+}
+
+export interface HrProgram {
+  id: string;
+  tenantId: string;
+  name: string;
+  destinationCityId: string;
+  status: 'draft' | 'active' | 'paused' | 'completed' | 'archived';
+  startsAt: string;
+  endsAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const getHrEmployees = (accessToken: string) =>
+  request<{ items: HrEmployeeSummary[]; page: number; pageSize: number; total: number; totalPages: number }>(
+    '/api/v1/hr/employees?page=1&pageSize=100',
+    {},
+    accessToken,
+  );
+
+export const createHrInvitation = (
+  accessToken: string,
+  input: { email: string; role: 'employee' | 'hr' },
+  idempotencyKey: string,
+) =>
+  request<{ invitation: HrInvitation }>(
+    '/api/v1/hr/invitations',
+    { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: JSON.stringify(input) },
+    accessToken,
+  );
+
+export const getHrPrograms = (accessToken: string) =>
+  request<{ items: HrProgram[]; page: number; pageSize: number; total: number; totalPages: number }>(
+    '/api/v1/hr/programs?page=1&pageSize=100',
+    {},
+    accessToken,
+  );
 
 export const getHrProviderRequests = (accessToken: string) =>
   request<{ items: HrProviderRequest[]; total: number }>(

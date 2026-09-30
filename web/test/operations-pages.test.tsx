@@ -17,7 +17,7 @@ const auth: AuthContextValue = {
 };
 
 vi.mock('../src/app/auth/auth-client', () => ({
-  getAaarrrReport: vi.fn().mockResolvedValue({ report: { activation: { numerator: 0, denominator: 0, rate: 0, status: 'no_data' }, acquisition: { numerator: 0, denominator: 0, rate: 0, status: 'no_data' }, retention: { numerator: 0, denominator: 0, rate: 0, status: 'no_data' }, referral: { numerator: 0, denominator: 0, rate: 0, status: 'no_data' }, revenue: { numerator: 0, denominator: 0, rate: 0, status: 'no_data' } } }),
+  getAaarrrReport: vi.fn().mockResolvedValue({ report: { metrics: {}, activation: { numerator: 0, denominator: 0, rate: 0, status: 'no_data' }, acquisition: { numerator: 0, denominator: 0, rate: 0, status: 'no_data' }, retention: { numerator: 0, denominator: 0, rate: 0, status: 'no_data' }, referral: { numerator: 0, denominator: 0, rate: 0, status: 'no_data' }, revenue: { numerator: 0, denominator: 0, rate: 0, status: 'no_data' } } }),
   getAdminEvents: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   getHrEmployees: vi.fn().mockResolvedValue({ items: [], page: 1, pageSize: 20, total: 0, totalPages: 1 }),
   createHrInvitation: vi.fn(),

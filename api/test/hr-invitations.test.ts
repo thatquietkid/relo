@@ -111,7 +111,11 @@ describe('HR employee invitations', () => {
 describe('HR invitation routes', () => {
   it('registers employee and invitation routes behind HR authorization', async () => {
     const repository = new InMemoryHrRepository();
-    const app = createApp({ logger: false }, { authService: authServiceFor(), hrRepository: repository });
+    const app = createApp({ logger: false }, {
+      authService: authServiceFor(),
+      hrRepository: repository,
+      invitationEmailSender: { async send() {} },
+    });
     const list = await app.inject({ method: 'GET', url: '/api/v1/hr/employees', headers: { authorization: 'Bearer hr-token' } });
     expect(list.statusCode).toBe(200);
     const create = await app.inject({ method: 'POST', url: '/api/v1/hr/invitations', headers: { authorization: 'Bearer hr-token', 'idempotency-key': 'invite-route-1' }, payload: { email: 'new@example.com' } });
