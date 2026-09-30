@@ -16,11 +16,12 @@ import { registerHrRoutes, type HrRouteDependencies } from './hr/routes.js';
 import { registerReviewRoutes, type ReviewRouteDependencies } from './review/routes.js';
 import { registerReportingRoutes, type ReportingRouteDependencies } from './reporting/routes.js';
 import { registerAdminRoutes, type AdminRouteDependencies } from './admin/routes.js';
+import { registerProfileRoutes, type ProfileRouteDependencies } from './profile/routes.js';
 import { loadConfig, type ApiConfig } from './shared/config.js';
 import './authorization/policy.js';
 import { allowedOrigin, securityHeaders } from './security/cors.js';
 
-export interface AppDependencies extends AuthRouteDependencies, OAuthRouteDependencies, EmployeeRouteDependencies, DirectoryRouteDependencies, ProviderRequestRouteDependencies, NotificationRouteDependencies, HrRouteDependencies, ReviewRouteDependencies, ReportingRouteDependencies, AdminRouteDependencies {}
+export interface AppDependencies extends AuthRouteDependencies, OAuthRouteDependencies, EmployeeRouteDependencies, DirectoryRouteDependencies, ProviderRequestRouteDependencies, NotificationRouteDependencies, HrRouteDependencies, ReviewRouteDependencies, ReportingRouteDependencies, AdminRouteDependencies, ProfileRouteDependencies {}
 
 export function createApp(
   options: FastifyServerOptions = {},
@@ -84,6 +85,7 @@ export function createApp(
   registerReviewRoutes(app, resolvedDependencies);
   registerReportingRoutes(app, resolvedDependencies);
   registerAdminRoutes(app, resolvedDependencies);
+  registerProfileRoutes(app, resolvedDependencies);
 
   app.setNotFoundHandler((request, reply) => {
     const error = new ApiError(404, 'NOT_FOUND', 'The requested resource was not found.');
