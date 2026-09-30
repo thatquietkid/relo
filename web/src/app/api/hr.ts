@@ -1,4 +1,4 @@
-import { request } from './base';
+import { request, requestHrLegacy } from './base';
 
 export type HrProviderRequestStatus =
   | 'submitted'
@@ -191,7 +191,7 @@ export const getHrProperties = (
   if (filters?.status) params.set('status', filters.status);
   if (filters?.type) params.set('type', filters.type);
   const query = params.toString() ? `?${params.toString()}` : '';
-  return request<{ properties: HrProperty[]; count: number }>(
+  return requestHrLegacy<{ properties: HrProperty[]; count: number }>(
     `/api/hr/properties${query}`,
     {},
     accessToken
@@ -202,7 +202,7 @@ export const createHrProperty = (
   accessToken: string,
   input: Omit<HrProperty, 'id' | 'createdAt' | 'updatedAt'>
 ) =>
-  request<{ property: HrProperty; message: string }>(
+  requestHrLegacy<{ property: HrProperty; message: string }>(
     '/api/hr/properties',
     {
       method: 'POST',
@@ -216,7 +216,7 @@ export const updateHrProperty = (
   propertyId: string,
   patch: Partial<HrProperty>
 ) =>
-  request<{ property: HrProperty; message: string }>(
+  requestHrLegacy<{ property: HrProperty; message: string }>(
     `/api/hr/properties/${encodeURIComponent(propertyId)}`,
     {
       method: 'PATCH',
@@ -226,7 +226,7 @@ export const updateHrProperty = (
   );
 
 export const deleteHrProperty = (accessToken: string, propertyId: string) =>
-  request<{ removed: boolean; id: string; message: string }>(
+  requestHrLegacy<{ removed: boolean; id: string; message: string }>(
     `/api/hr/properties/${encodeURIComponent(propertyId)}`,
     {
       method: 'DELETE',
@@ -237,7 +237,7 @@ export const deleteHrProperty = (accessToken: string, propertyId: string) =>
 // HR Cohorts Endpoints
 export const getHrCohorts = (accessToken: string, status?: string) => {
   const query = status ? `?status=${encodeURIComponent(status)}` : '';
-  return request<{ cohorts: HrCohort[]; count: number }>(
+  return requestHrLegacy<{ cohorts: HrCohort[]; count: number }>(
     `/api/hr/cohorts${query}`,
     {},
     accessToken
@@ -248,7 +248,7 @@ export const createHrCohort = (
   accessToken: string,
   input: Omit<HrCohort, 'id' | 'createdAt' | 'updatedAt'>
 ) =>
-  request<{ cohort: HrCohort; message: string }>(
+  requestHrLegacy<{ cohort: HrCohort; message: string }>(
     '/api/hr/cohorts',
     {
       method: 'POST',
@@ -262,7 +262,7 @@ export const updateHrCohort = (
   cohortId: string,
   patch: Partial<HrCohort>
 ) =>
-  request<{ cohort: HrCohort; message: string }>(
+  requestHrLegacy<{ cohort: HrCohort; message: string }>(
     `/api/hr/cohorts/${encodeURIComponent(cohortId)}`,
     {
       method: 'PATCH',

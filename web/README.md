@@ -71,12 +71,23 @@ The frontend implements comprehensive, human-readable error reporting at every l
 ## Development & Build
 
 ```bash
-# Run local Vite development server
-npm run dev
+# Build and run the Fastify API (port 3000)
+npm run build --workspace @relo/api
+node --env-file=api/.env.local api/dist/server.js
+
+# In another PowerShell terminal, run the HR compatibility API (port 4100)
+$env:PORT = '4100'
+$env:FRONTEND_ORIGIN = 'http://127.0.0.1:8085'
+node --env-file=api/.env.local backend/server.js
+
+# In a third terminal, run the Vite development server
+npm run dev --workspace @relo/web
 
 # Compile TypeScript and bundle production assets
-npm run build
+npm run build --workspace @relo/web
 
 # Run unit tests
-npx vitest run web/test
+npm test
 ```
+
+The web client sends HR property and cohort requests to `VITE_RELO_HR_LEGACY_API_URL` when configured. In Vite development mode it defaults to `http://127.0.0.1:4100`; other API calls use `VITE_RELO_API_URL`. The compatibility service currently keeps property and cohort records in memory, so those records reset when that service restarts.

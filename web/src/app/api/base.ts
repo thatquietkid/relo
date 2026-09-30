@@ -10,6 +10,12 @@ export const apiUrl = (): string => {
   return (configured ?? '').replace(/\/$/, '');
 };
 
+const hrLegacyApiUrl = (): string => {
+  const configured = import.meta.env.VITE_RELO_HR_LEGACY_API_URL as string | undefined;
+  if (configured) return configured.replace(/\/$/, '');
+  return import.meta.env.DEV ? 'http://127.0.0.1:4100' : apiUrl();
+};
+
 export function failure(response: ApiErrorResponse, status: number): ApiFailure {
   const error = new Error(response.error.message) as ApiFailure;
   error.name = 'ApiFailure';
@@ -21,7 +27,7 @@ export function failure(response: ApiErrorResponse, status: number): ApiFailure 
 /**
  * Standard typed JSON request function with error normalization.
  */
-export async function request<T>(path: string, init: RequestInit = {}, accessToken?: string): Promise<T> {
+async function requestFrom<T>(baseUrl: string, path: string, init: RequestInit, accessToken?: string): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('Accept', 'application/json');
   if (init.body) headers.set('Content-Type', 'application/json');
@@ -29,7 +35,7 @@ export async function request<T>(path: string, init: RequestInit = {}, accessTok
 
   let response: Response;
   try {
-    response = await fetch(`${apiUrl()}${path}`, { ...init, headers });
+    response = await fetch(`${baseUrl}${path}`, { ...init, headers });
   } catch {
     throw failure({
       error: {
@@ -66,3 +72,9 @@ export async function request<T>(path: string, init: RequestInit = {}, accessTok
   }
   return payload as T;
 }
+
+export const request = <T>(path: string, init: RequestInit = {}, accessToken?: string) =>
+  requestFrom<T>(apiUrl(), path, init, accessToken);
+
+export const requestHrLegacy = <T>(path: string, init: RequestInit = {}, accessToken?: string) =>
+  requestFrom<T>(hrLegacyApiUrl(), path, init, accessToken);
